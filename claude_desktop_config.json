@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sketchup": {
+      "command": "python",
+      "args": ["/ABSOLUTE/PATH/TO/sketchup-mcp/mcp_server/sketchup_mcp.py"],
+      "env": {}
+    }
+  }
+}
