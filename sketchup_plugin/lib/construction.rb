@@ -7,3 +7,5 @@ end
 
 # Load all construction submodules
 require_relative 'construction/roof_truss'
+require_relative 'construction/wall'
+require_relative 'construction/medeek_truss'

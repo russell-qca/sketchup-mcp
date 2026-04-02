@@ -578,17 +578,23 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="create_roof_truss",
             description=(
-                "Create engineered roof trusses with accurate geometry based on professional truss analysis. "
-                "Supports king post (simple, up to 26') and fink/W-truss (most common, 20-60'). "
-                "Trusses include proper web patterns, angled members, and realistic connections. "
-                "Use construction://roof-trusses resource for detailed guidance."
+                "DIRECTLY create professional engineered roof trusses in SketchUp using Medeek Truss Plugin. "
+                "IMPORTANT: ONE CALL creates ALL trusses - use the 'count' parameter to specify how many. "
+                "For example, to create 5 trusses, call this tool ONCE with count=5, NOT 5 separate calls. "
+                "Supports 14 truss types: king, queen, fink, howe, fan, mod_queen, double_fink, double_howe, "
+                "mod_fan, triple_fink, triple_howe, quad_fink, quad_howe, penta_howe. "
+                "Creates complete 3D models with proper web patterns, angled members, and realistic connections.\n\n"
+                "CRITICAL WORKFLOW RULES:\n"
+                "1. NEVER create test or exploratory geometry in the model to verify calculations. All geometry decisions must be derived from querying existing model data (bounding boxes, entity positions, tags, etc.) BEFORE creating any final geometry. If verification is needed, do it through Ruby queries using execute_ruby - never by placing temporary objects in the model.\n\n"
+                "2. After calling create_roof_truss, ALWAYS use execute_ruby to audit the top-level model entities for any residual or misplaced groups (e.g., individual Fink_Truss_* groups not inside TRUSS_ASSEMBLY, or groups at incorrect Z elevations or outside expected bounds). Delete any stray groups before reporting completion.\n\n"
+                "3. If a 'layer' parameter was provided, immediately use execute_ruby after truss creation to assign the TRUSS_ASSEMBLY group to that tag/layer. Do not leave it on Layer0."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "span": {
                         "type": "number",
-                        "description": "Clear span in feet (wall-to-wall distance, excluding overhang)"
+                        "description": "Clear span in feet (wall-to-wall distance, excluding overhang). Default: 24 feet"
                     },
                     "pitch": {
                         "type": "string",
@@ -597,18 +603,17 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "type": {
                         "type": "string",
-                        "enum": ["king", "fink"],
-                        "description": "Truss type: king (simple with center post) or fink (W-pattern, most common)",
+                        "enum": ["king", "queen", "fink", "howe", "fan", "mod_queen", "double_fink", "double_howe", "mod_fan", "triple_fink", "triple_howe", "quad_fink", "quad_howe", "penta_howe"],
+                        "description": "Truss type. Common types: fink (W-pattern, most common), king (simple with center post), howe (M-pattern), queen (two center posts)",
                         "default": "fink"
                     },
-                    "count": {
-                        "type": "integer",
-                        "description": "Number of trusses to create",
-                        "default": 1
+                    "building_depth": {
+                        "type": "number",
+                        "description": "Building depth in feet (perpendicular to span). Medeek will fill this area with trusses at proper spacing. Default: 24 feet. Ignored if top_plate_corners provided."
                     },
                     "spacing": {
                         "type": "number",
-                        "description": "Spacing between trusses in inches (typically 24 OC)",
+                        "description": "Spacing between trusses in inches (typically 24 OC). Only used by Medeek to determine truss placement.",
                         "default": 24.0
                     },
                     "overhang": {
@@ -627,14 +632,99 @@ async def list_tools() -> list[types.Tool]:
                         "items": {"type": "number"},
                         "minItems": 3,
                         "maxItems": 3,
-                        "description": "Left wall bottom position [x, y, z] in inches"
+                        "description": "Left wall bottom position [x, y, z] in inches. Ignored if top_plate_corners provided."
+                    },
+                    "top_plate_corners": {
+                        "type": "array",
+                        "description": "PREFERRED when framing exists: Provide the 4 outer corner points from the top of the top plate face. Format: [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], [x4,y4,z4]] in order front-left, front-right, back-right, back-left. IMPORTANT: Just pass the face corners AS-IS - do NOT calculate or adjust for truss positions. Medeek automatically determines truss count and placement based on the parallelogram.",
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "minItems": 3,
+                            "maxItems": 3
+                        },
+                        "minItems": 4,
+                        "maxItems": 4
                     },
                     "layer": {
                         "type": "string",
                         "description": "Layer name for trusses"
                     }
                 },
-                "required": ["span"]
+                "required": []
+            },
+        ),
+
+        types.Tool(
+            name="create_wall",
+            description=(
+                "Create a framed wall with studs, plates, and optional openings (doors/windows). "
+                "Automatically places studs at proper spacing (16\" or 24\" OC), adds double top plates, "
+                "and creates proper framing around openings with kings, jacks, headers, and cripples."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "length": {
+                        "type": "number",
+                        "description": "Wall length in feet"
+                    },
+                    "height": {
+                        "type": "number",
+                        "description": "Wall height in feet (default: 8)",
+                        "default": 8.0
+                    },
+                    "stud_spacing": {
+                        "type": "number",
+                        "description": "Stud spacing in inches on-center (typically 16 or 24)",
+                        "default": 16.0
+                    },
+                    "lumber_size": {
+                        "type": "string",
+                        "enum": ["2x4", "2x6", "2x8"],
+                        "description": "Lumber size for framing members",
+                        "default": "2x4"
+                    },
+                    "openings": {
+                        "type": "array",
+                        "description": "Array of door/window openings",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["door", "window"],
+                                    "description": "Opening type"
+                                },
+                                "position": {
+                                    "type": "number",
+                                    "description": "Center position along wall in feet (from left end)"
+                                },
+                                "width": {
+                                    "type": "number",
+                                    "description": "Opening width in feet"
+                                },
+                                "height": {
+                                    "type": "number",
+                                    "description": "Opening height in feet"
+                                }
+                            },
+                            "required": ["type", "position", "width", "height"]
+                        }
+                    },
+                    "origin": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Left end position [x, y, z] in inches"
+                    },
+                    "layer": {
+                        "type": "string",
+                        "description": "Layer name for wall"
+                    }
+                },
+                "required": ["length"]
             },
         ),
 
@@ -737,6 +827,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         # ── Construction ───────────────────────────────────────────────────
         elif name == "create_roof_truss":
             return ok(await su_post("/construction/roof_truss", arguments))
+
+        elif name == "create_wall":
+            return ok(await su_post("/construction/wall", arguments))
 
         # ── Execute Ruby ───────────────────────────────────────────────────
         elif name == "execute_ruby":

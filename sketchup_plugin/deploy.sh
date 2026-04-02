@@ -21,17 +21,22 @@ echo "Source directory: $SCRIPT_DIR"
 SKETCHUP_BASE="$HOME/Library/Application Support"
 PLUGINS_DIR=""
 
-# Search for SketchUp directories
-for dir in "$SKETCHUP_BASE"/SketchUp*; do
-    if [ -d "$dir/SketchUp/Plugins" ]; then
-        PLUGINS_DIR="$dir/SketchUp/Plugins"
-        break
-    fi
-done
+# Try SketchUp 2025 first (preferred)
+if [ -d "$SKETCHUP_BASE/SketchUp 2025/SketchUp/Plugins" ]; then
+    PLUGINS_DIR="$SKETCHUP_BASE/SketchUp 2025/SketchUp/Plugins"
+# Fallback: search for any SketchUp version
+else
+    for dir in "$SKETCHUP_BASE"/SketchUp*; do
+        if [ -d "$dir/SketchUp/Plugins" ]; then
+            PLUGINS_DIR="$dir/SketchUp/Plugins"
+            break
+        fi
+    done
+fi
 
 if [ -z "$PLUGINS_DIR" ]; then
     echo -e "${RED}Error: Could not find SketchUp Plugins directory${NC}"
-    echo "Expected location: ~/Library/Application Support/SketchUp <version>/SketchUp/Plugins/"
+    echo "Expected location: ~/Library/Application Support/SketchUp 2026/SketchUp/Plugins/"
     exit 1
 fi
 
@@ -61,6 +66,12 @@ cp "$SCRIPT_DIR/lib/construction.rb" "$PLUGINS_DIR/lib/"
 
 echo "  - Copying lib/construction/roof_truss.rb"
 cp "$SCRIPT_DIR/lib/construction/roof_truss.rb" "$PLUGINS_DIR/lib/construction/"
+
+echo "  - Copying lib/construction/wall.rb"
+cp "$SCRIPT_DIR/lib/construction/wall.rb" "$PLUGINS_DIR/lib/construction/"
+
+echo "  - Copying lib/construction/medeek_truss.rb"
+cp "$SCRIPT_DIR/lib/construction/medeek_truss.rb" "$PLUGINS_DIR/lib/construction/"
 
 # Remove backup file if it exists in target
 if [ -f "$PLUGINS_DIR/sketchup_mcp_server.rb.bak" ]; then

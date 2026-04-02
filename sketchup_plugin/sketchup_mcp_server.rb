@@ -38,27 +38,13 @@ module SU_MCP
   @queue_mutex = Mutex.new
   @queue_cv = ConditionVariable.new
   @timer_id = nil
+  @last_request_timing = {}
 
-  # Logging to file for debugging
-  LOG_FILE = "/Users/manhattan/sketchup_mcp_debug.log"
-
+  # Logging to console for debugging (file logging disabled for performance)
   def self.log(message)
     timestamp = Time.now.strftime("%Y-%m-%d %H:%M:%S.%L")
     log_line = "[#{timestamp}] #{message}"
-
-    # Always write to console first
     puts log_line
-
-    # Then try to write to file
-    begin
-      File.open(LOG_FILE, 'a') do |f|
-        f.puts log_line
-        f.flush
-      end
-    rescue => e
-      puts "!!! Logging error: #{e.class}: #{e.message}"
-      puts "!!! Tried to write to: #{LOG_FILE}"
-    end
   end
 
   # ---------------------------------------------------------------------------
@@ -567,9 +553,44 @@ module SU_MCP
   # Old truss helper methods have been moved to Construction::RoofTruss module
 
 
-  # Main roof truss handler - delegates to Construction::RoofTruss module
+  # Main roof truss handler - uses Medeek if available, falls back to built-in
   def self.handle_create_roof_truss(params = {})
-    Construction::RoofTruss.create(params)
+    if Construction::MedeekTruss.available?
+      begin
+        result = Construction::MedeekTruss.create(params)
+        # If Medeek succeeded, return its result
+        if result && result[:status] == 'created'
+          return result
+        else
+          # Medeek failed to create trusses
+          error_msg = "Medeek Truss Plugin failed to create trusses. This may be due to invalid parameters or license issues. Using built-in implementation as fallback."
+          log "[SU_MCP] #{error_msg}"
+          built_in_result = Construction::RoofTruss.create(params)
+          built_in_result[:warning] = error_msg
+          built_in_result[:engine] = 'built-in (medeek failed)'
+          return built_in_result
+        end
+      rescue => e
+        error_msg = "Medeek Truss Plugin error: #{e.message}. Using built-in implementation as fallback."
+        log "[SU_MCP] #{error_msg}"
+        built_in_result = Construction::RoofTruss.create(params)
+        built_in_result[:warning] = error_msg
+        built_in_result[:engine] = 'built-in (medeek error)'
+        return built_in_result
+      end
+    else
+      # Medeek not installed
+      log "[SU_MCP] Medeek Truss Plugin not detected, using built-in implementation"
+      built_in_result = Construction::RoofTruss.create(params)
+      built_in_result[:info] = "Using built-in truss implementation. Install Medeek Truss Plugin for professional-grade trusses with more types and features."
+      built_in_result[:engine] = 'built-in (medeek not installed)'
+      return built_in_result
+    end
+  end
+
+  # Wall handler - delegates to Construction::Wall module
+  def self.handle_create_wall(params = {})
+    Construction::Wall.create(params)
   end
 
   # ---------------------------------------------------------------------------
@@ -603,6 +624,7 @@ module SU_MCP
     ['POST', '/components/place']  => :handle_place_component,
     # POST - Construction
     ['POST', '/construction/roof_truss'] => :handle_create_roof_truss,
+    ['POST', '/construction/wall']       => :handle_create_wall,
     # POST - Ruby
     ['POST', '/ruby/execute']      => :handle_execute_ruby,
   }
@@ -671,20 +693,14 @@ module SU_MCP
       log "[SU_MCP] Queue size: #{@request_queue.length}"
     end
 
-    # Wait for completion (with timeout)
-    log "[SU_MCP] Waiting for completion..."
-    timeout = Time.now + 30 # 30 second timeout
-    @queue_mutex.synchronize do
-      until request_obj[:completed]
-        if Time.now > timeout
-          log "[SU_MCP] Request timeout!"
-          return send_error_response("Request timeout", 504)
-        end
-        @queue_cv.wait(@queue_mutex, 0.1)
+    # Wait for completion with simple polling (no condition variable)
+    timeout_at = Time.now + 30
+    until request_obj[:completed]
+      if Time.now > timeout_at
+        return send_error_response("Request timeout", 504)
       end
+      sleep(0.001)  # 1ms sleep between checks
     end
-
-    log "[SU_MCP] Request completed"
 
     # Return response or error
     if request_obj[:error]
@@ -715,24 +731,18 @@ module SU_MCP
       # This prevents deadlocks and allows HTTP thread to check status
       result = public_send(request_obj[:handler], request_obj[:params])
 
-      # Update result with mutex
-      @queue_mutex.synchronize do
-        request_obj[:response] = result
-        request_obj[:completed] = true
-        @queue_cv.broadcast
-      end
+      # Update result (no mutex needed for simple assignment)
+      request_obj[:response] = result
+      request_obj[:completed] = true
 
       log "[SU_MCP] Handler completed successfully"
     rescue => e
       log "[SU_MCP] Handler error: #{e.class}: #{e.message}"
       log e.backtrace.first(5).join("\n")
 
-      # Update error with mutex
-      @queue_mutex.synchronize do
-        request_obj[:error] = { class: e.class.name, message: e.message }
-        request_obj[:completed] = true
-        @queue_cv.broadcast
-      end
+      # Update error (no mutex needed for simple assignment)
+      request_obj[:error] = { class: e.class.name, message: e.message }
+      request_obj[:completed] = true
     end
   rescue => e
     log "[SU_MCP] CRITICAL ERROR in process_queue: #{e.class}: #{e.message}"
@@ -753,11 +763,13 @@ module SU_MCP
             begin
               client = @server.accept
               request = ''
+              start_time = Time.now
 
               # Read request
               while (line = client.gets) && line !~ /^\s*$/
                 request += line
               end
+              read_time = Time.now
 
               # Read body if present
               if request =~ /Content-Length: (\d+)/i
@@ -765,29 +777,49 @@ module SU_MCP
                 request += "\r\n" + client.read(content_length)
               end
 
+              # Store timing
+              @last_request_timing = {
+                accept_to_read: ((read_time - start_time) * 1000).round(1),
+                request_size: request.length,
+                handle_start: Time.now
+              }
+
               # Handle request
               response = handle_request(request)
+              handle_time = Time.now
+
+              @last_request_timing[:handle_duration] = ((handle_time - @last_request_timing[:handle_start]) * 1000).round(1)
+
               client.write(response)
+              write_time = Time.now
+
+              @last_request_timing[:write_duration] = ((write_time - handle_time) * 1000).round(1)
+              @last_request_timing[:total] = ((write_time - start_time) * 1000).round(1)
+
+              # Schedule main thread to log this
+              UI.start_timer(0) do
+                log "[SU_MCP] Request timing: read=#{@last_request_timing[:accept_to_read]}ms, handle=#{@last_request_timing[:handle_duration]}ms, write=#{@last_request_timing[:write_duration]}ms, TOTAL=#{@last_request_timing[:total]}ms"
+              end
 
             rescue => e
-              puts "[SU_MCP] Request error: #{e.message}"
+              UI.start_timer(0) { log "[SU_MCP] Request error: #{e.message}" }
             ensure
               client.close if client
             end
           end
         rescue => e
-          puts "[SU_MCP] Server error: #{e.message}"
+          UI.start_timer(0) { log "[SU_MCP] Server error: #{e.message}" }
         end
       end
 
       # Start main thread timer to process queued requests
-      # Timer runs every 0.1 seconds (100ms) to check for pending requests
-      @timer_id = UI.start_timer(0.1, true) { SU_MCP.process_queue }
+      # Timer runs every 0.03 seconds (30ms) to check for pending requests
+      @timer_id = UI.start_timer(0.03, true) { SU_MCP.process_queue }
       log "[SU_MCP] Main thread timer started (ID: #{@timer_id})"
 
       UI.messagebox("SketchUp MCP Server started on port #{PORT}") if defined?(UI)
       log "[SU_MCP] Server running on http://localhost:#{PORT}"
-      log "[SU_MCP] Debug log file: #{LOG_FILE}"
+      log "[SU_MCP] Logging to Ruby Console (Window → Ruby Console)"
 
     rescue Errno::EADDRINUSE
       error_msg = "Port #{PORT} is already in use. Another instance may be running.\n\n" \

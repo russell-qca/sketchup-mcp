@@ -6,7 +6,7 @@ module Construction
   class RoofTruss
     # Create roof trusses based on parameters
     def self.create(params = {})
-      span_ft = params['span'].to_f
+      span_ft = params['span'] ? params['span'].to_f : 24.0  # Default 24 feet
       span = span_ft * 12.0  # Convert feet to inches
       pitch = params['pitch'] || "6:12"
       truss_type = params['type'] || 'fink'
