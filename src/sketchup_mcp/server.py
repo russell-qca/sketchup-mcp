@@ -118,6 +118,12 @@ async def list_resources() -> list[types.Resource]:
     """Provide construction knowledge resources to Claude."""
     return [
         types.Resource(
+            uri="construction://foundations",
+            name="Foundation Creation Guide - Medeek Foundation Plugin",
+            mimeType="text/markdown",
+            description="CRITICAL GUIDE for using the Medeek Foundation Plugin API. Explains the correct workflow (create with defaults, then modify), common mistakes to avoid, and how to use create_foundation tool properly. READ THIS BEFORE creating any foundations."
+        ),
+        types.Resource(
             uri="construction://roof-trusses",
             name="Roof Truss Design Guide",
             mimeType="text/markdown",
@@ -141,6 +147,7 @@ async def list_resources() -> list[types.Resource]:
 async def read_resource(uri: str) -> str:
     """Read construction knowledge resource files."""
     resource_map = {
+        "construction://foundations": RESOURCES_DIR / "foundation_guide.md",
         "construction://roof-trusses": RESOURCES_DIR / "roof_trusses.md",
         "construction://framing": RESOURCES_DIR / "framing_standards.md",
         "construction://stairs": RESOURCES_DIR / "stairs.md",
@@ -728,6 +735,471 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
 
+        types.Tool(
+            name="create_foundation",
+            description=(
+                "Create concrete slab-on-grade foundation (slab, footer, footing) using Medeek Foundation Plugin. "
+                "**USE THIS TOOL for any request involving: concrete slabs, footers, footings, foundations, slab-on-grade, or concrete pads.** "
+                "**DO NOT use execute_ruby or other geometry tools to create slabs/foundations - ALWAYS use this tool instead.** "
+                "\n\n"
+                "**IMPORTANT: Read the construction://foundations resource BEFORE using this tool for the first time.**"
+                "\n\n"
+                "**How this tool works (Medeek API workflow):**\n"
+                "1. Creates slab-on-grade with DEFAULT settings using only the outline geometry\n"
+                "2. Automatically modifies ALL requested parameters (depth, thickness, rebar, bolts, etc.) using sog_set_attribute with regen=false\n"
+                "3. Sets the final parameter with regen=true to regenerate once with all custom settings applied\n"
+                "\n"
+                "**You only need to call this tool ONCE** - it handles the complete create-then-modify workflow automatically. "
+                "Do NOT call this tool multiple times. Do NOT try to create then modify separately. This tool does everything in ONE call."
+                "\n\n"
+                "Requires Medeek Foundation Plugin to be installed and licensed. "
+                "Creates professional foundation with footing (footer), concrete slab, optional garage curb, optional rebar reinforcement, and optional anchor bolts. "
+                "Supports top/bottom footing bars, slab reinforcement (welded wire fabric), anchor bolts with sill plate configuration. "
+                "\n\n"
+                "Common use cases: 'create a 40x60 slab', 'concrete slab with footer', 'foundation with rebar', 'slab-on-grade foundation'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "outline_points": {
+                        "type": "array",
+                        "description": "Array of corner points [[x1,y1,z1], [x2,y2,z2], ...] defining the foundation perimeter. Points should be in order (clockwise or counter-clockwise). Minimum 3 points.",
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "minItems": 3,
+                            "maxItems": 3
+                        },
+                        "minItems": 3
+                    },
+                    "foundation_depth": {
+                        "type": "number",
+                        "description": "Total foundation depth in inches (from top of slab to bottom of footing). Default: 24 inches",
+                        "default": 24.0
+                    },
+                    "slab_thickness": {
+                        "type": "number",
+                        "description": "Concrete slab thickness in inches. Default: 4 inches",
+                        "default": 4.0
+                    },
+                    "footing_width": {
+                        "type": "number",
+                        "description": "Footing width in inches. Default: 16 inches",
+                        "default": 16.0
+                    },
+                    "garage_curb": {
+                        "type": "boolean",
+                        "description": "Create garage door curb. Default: false",
+                        "default": False
+                    },
+                    "curb_width": {
+                        "type": "number",
+                        "description": "Garage curb width in inches (only used if garage_curb is true). Default: 4 inches",
+                        "default": 4.0
+                    },
+                    "curb_height": {
+                        "type": "number",
+                        "description": "Garage curb height in inches (only used if garage_curb is true). Default: 4 inches",
+                        "default": 4.0
+                    },
+                    "rebar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable rebar/reinforcement options. Default: false",
+                        "default": False
+                    },
+                    "top_bar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable top footing bars (only if rebar_enabled is true). Default: false",
+                        "default": False
+                    },
+                    "top_bar_diameter": {
+                        "type": "number",
+                        "description": "Top bar diameter in inches (e.g., 0.5 for #4 rebar, 0.625 for #5). Default: 0.5",
+                        "default": 0.5
+                    },
+                    "top_bar_quantity": {
+                        "type": "integer",
+                        "description": "Number of top bars. Default: 2",
+                        "default": 2
+                    },
+                    "bottom_bar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable bottom footing bars (only if rebar_enabled is true). Default: false",
+                        "default": False
+                    },
+                    "bottom_bar_diameter": {
+                        "type": "number",
+                        "description": "Bottom bar diameter in inches. Default: 0.5",
+                        "default": 0.5
+                    },
+                    "bottom_bar_quantity": {
+                        "type": "integer",
+                        "description": "Number of bottom bars. Default: 2",
+                        "default": 2
+                    },
+                    "slab_reinforcement_enabled": {
+                        "type": "boolean",
+                        "description": "Enable slab reinforcement (only if rebar_enabled is true). Default: false",
+                        "default": False
+                    },
+                    "slab_reinforcement_type": {
+                        "type": "string",
+                        "description": "Slab reinforcement type (e.g., 'WWF' for welded wire fabric). Default: WWF",
+                        "default": "WWF"
+                    },
+                    "slab_reinforcement_spacing": {
+                        "type": "number",
+                        "description": "Slab reinforcement spacing in inches. Default: 12",
+                        "default": 12.0
+                    },
+                    "anchor_bolts_enabled": {
+                        "type": "boolean",
+                        "description": "Enable anchor bolts and sill plate. Default: false",
+                        "default": False
+                    },
+                    "bolt_size": {
+                        "type": "string",
+                        "description": "Anchor bolt length in inches (e.g., '10', '12', '14'). Default: '12'",
+                        "default": "12"
+                    },
+                    "bolt_diameter": {
+                        "type": "string",
+                        "description": "Anchor bolt diameter (e.g., '1/2', '5/8'). Default: '1/2'",
+                        "default": "1/2"
+                    },
+                    "washer_type": {
+                        "type": "string",
+                        "description": "Washer size (e.g., '2x2', '3x3'). Default: '2x2'",
+                        "default": "2x2"
+                    },
+                    "bolt_spacing_ft": {
+                        "type": "number",
+                        "description": "Anchor bolt spacing in feet on center. Typical: 6 feet. Default: 6.0",
+                        "default": 6.0
+                    },
+                    "sill_width": {
+                        "type": "number",
+                        "description": "Sill plate width in inches (e.g., 3.5 for 2x4 actual). Default: 3.5",
+                        "default": 3.5
+                    },
+                    "sill_thickness": {
+                        "type": "number",
+                        "description": "Sill plate thickness in inches (e.g., 1.5 for 2x4 actual). Default: 1.5",
+                        "default": 1.5
+                    },
+                    "corner_distance": {
+                        "type": "number",
+                        "description": "Distance from corner for first anchor bolt in inches. Default: 12",
+                        "default": 12.0
+                    },
+                    "fpsf_enabled": {
+                        "type": "boolean",
+                        "description": "Enable Frost Protected Shallow Foundation (FPSF) insulation. Default: false",
+                        "default": False
+                    },
+                    "insulation_type": {
+                        "type": "string",
+                        "description": "FPSF insulation type: 'Vertical Only', 'Vert. and Horz.', or 'None'. Default: 'None'",
+                        "default": "None"
+                    },
+                    "vertical_insulation": {
+                        "type": "number",
+                        "description": "Vertical insulation R-value. Default: 2.0",
+                        "default": 2.0
+                    },
+                    "wing_insulation": {
+                        "type": "number",
+                        "description": "Horizontal wing insulation R-value. Default: 2.0",
+                        "default": 2.0
+                    },
+                    "corner_insulation": {
+                        "type": "number",
+                        "description": "Corner insulation R-value. Default: 2.0",
+                        "default": 2.0
+                    },
+                    "dim_a": {
+                        "type": "number",
+                        "description": "FPSF dimension A in inches. Default: 24.0",
+                        "default": 24.0
+                    },
+                    "dim_b": {
+                        "type": "number",
+                        "description": "FPSF dimension B in inches. Default: 24.0",
+                        "default": 24.0
+                    },
+                    "dim_c": {
+                        "type": "number",
+                        "description": "FPSF dimension C in inches. Default: 24.0",
+                        "default": 24.0
+                    },
+                    "slab_insulation_enabled": {
+                        "type": "boolean",
+                        "description": "Enable slab insulation. Default: false",
+                        "default": False
+                    },
+                    "slab_insulation": {
+                        "type": "number",
+                        "description": "Slab insulation R-value. Default: 2.0",
+                        "default": 2.0
+                    },
+                    "subbase_enabled": {
+                        "type": "boolean",
+                        "description": "Enable subbase layer beneath slab. Default: false",
+                        "default": False
+                    },
+                    "subbase_depth": {
+                        "type": "number",
+                        "description": "Subbase depth in inches. Default: 4.0",
+                        "default": 4.0
+                    },
+                    "subbase_material": {
+                        "type": "string",
+                        "description": "Subbase material: 'Gravel', 'Stone1', or 'corrugated_metal'. Default: 'Gravel'",
+                        "default": "Gravel"
+                    },
+                    "drain_enabled": {
+                        "type": "boolean",
+                        "description": "Enable perimeter drain. Default: false",
+                        "default": False
+                    },
+                    "layer": {
+                        "type": "string",
+                        "description": "Layer name for foundation"
+                    }
+                },
+                "required": ["outline_points"]
+            },
+        ),
+
+        types.Tool(
+            name="read_foundation_attributes",
+            description=(
+                "Read all attributes from an existing Medeek Foundation assembly. "
+                "Returns all foundation parameters including dimensions, rebar settings, anchor bolts, etc. "
+                "Can read from a selected foundation or by providing the group name."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Foundation group name (optional). If not provided, will read from currently selected foundation."
+                    }
+                },
+                "required": []
+            },
+        ),
+
+        types.Tool(
+            name="read_foundation_attribute",
+            description=(
+                "Read a specific attribute from an existing Medeek Foundation assembly. "
+                "Use this to query individual parameters like BOLTSIZE, FDEPTH, SLABTHICKNESS, etc. "
+                "See Medeek Foundation API documentation for available attribute names."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attribute_name": {
+                        "type": "string",
+                        "description": "The attribute name to read (e.g., 'BOLTSIZE', 'FDEPTH', 'SLABTHICKNESS', 'FTGWIDTH')"
+                    },
+                    "group_name": {
+                        "type": "string",
+                        "description": "Foundation group name (optional). If not provided, will read from currently selected foundation."
+                    }
+                },
+                "required": ["attribute_name"]
+            },
+        ),
+
+        types.Tool(
+            name="modify_foundation",
+            description=(
+                "Modify an EXISTING slab-on-grade foundation created by Medeek Foundation Plugin. "
+                "**USE THIS TOOL to change parameters on an existing foundation** instead of deleting and recreating. "
+                "\n\n"
+                "**IMPORTANT: This modifies an existing foundation - do NOT use create_foundation to modify!**"
+                "\n\n"
+                "How this works:\n"
+                "1. Takes the foundation group_name (from create_foundation response or read_foundation_attributes)\n"
+                "2. Accepts any parameters you want to change (depth, thickness, rebar, bolts, etc.)\n"
+                "3. Uses Medeek API to modify the existing foundation with sog_set_attribute\n"
+                "4. Regenerates the foundation once with all changes applied\n"
+                "\n"
+                "**Common use cases:**\n"
+                "- Change foundation depth from 24\" to 30\"\n"
+                "- Add rebar to existing foundation\n"
+                "- Add or remove anchor bolts\n"
+                "- Modify garage curb settings\n"
+                "- Change slab thickness or footing width\n"
+                "\n"
+                "**You only need to provide the parameters you want to CHANGE** - unchanged parameters remain as-is."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Foundation group name (e.g., 'FOUNDATION_SOG_POLYGON_ASSEMBLY_20260315133308'). Get this from create_foundation response or read_foundation_attributes.",
+                    },
+                    "foundation_depth": {
+                        "type": "number",
+                        "description": "Total foundation depth in inches (from top of slab to bottom of footing)"
+                    },
+                    "slab_thickness": {
+                        "type": "number",
+                        "description": "Concrete slab thickness in inches"
+                    },
+                    "footing_width": {
+                        "type": "number",
+                        "description": "Footing width in inches"
+                    },
+                    "garage_curb": {
+                        "type": "boolean",
+                        "description": "Create garage door curb (true) or remove it (false)"
+                    },
+                    "curb_width": {
+                        "type": "number",
+                        "description": "Garage curb width in inches (only used if garage_curb is true)"
+                    },
+                    "curb_height": {
+                        "type": "number",
+                        "description": "Garage curb height in inches (only used if garage_curb is true)"
+                    },
+                    "rebar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) rebar/reinforcement options"
+                    },
+                    "top_bar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) top footing bars"
+                    },
+                    "top_bar_diameter": {
+                        "type": "number",
+                        "description": "Top bar diameter in inches (e.g., 0.5 for #4 rebar)"
+                    },
+                    "top_bar_quantity": {
+                        "type": "integer",
+                        "description": "Number of top bars"
+                    },
+                    "bottom_bar_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) bottom footing bars"
+                    },
+                    "bottom_bar_diameter": {
+                        "type": "number",
+                        "description": "Bottom bar diameter in inches"
+                    },
+                    "bottom_bar_quantity": {
+                        "type": "integer",
+                        "description": "Number of bottom bars"
+                    },
+                    "slab_reinforcement_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) slab reinforcement"
+                    },
+                    "slab_reinforcement_type": {
+                        "type": "string",
+                        "description": "Slab reinforcement type (e.g., 'WWF' for welded wire fabric)"
+                    },
+                    "slab_reinforcement_spacing": {
+                        "type": "number",
+                        "description": "Slab reinforcement spacing in inches"
+                    },
+                    "anchor_bolts_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) anchor bolts and sill plate"
+                    },
+                    "bolt_size": {
+                        "type": "string",
+                        "description": "Anchor bolt length in inches (e.g., '10', '12', '14')"
+                    },
+                    "bolt_diameter": {
+                        "type": "string",
+                        "description": "Anchor bolt diameter (e.g., '1/2', '5/8')"
+                    },
+                    "washer_type": {
+                        "type": "string",
+                        "description": "Washer size (e.g., '2x2', '3x3')"
+                    },
+                    "bolt_spacing_ft": {
+                        "type": "number",
+                        "description": "Bolt spacing in feet on center"
+                    },
+                    "sill_width": {
+                        "type": "number",
+                        "description": "Sill plate width in inches"
+                    },
+                    "sill_thickness": {
+                        "type": "number",
+                        "description": "Sill plate thickness in inches"
+                    },
+                    "corner_distance": {
+                        "type": "number",
+                        "description": "Distance from corner to first bolt in inches"
+                    },
+                    "fpsf_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) Frost Protected Shallow Foundation (FPSF) insulation"
+                    },
+                    "insulation_type": {
+                        "type": "string",
+                        "description": "FPSF insulation type: 'Vertical Only', 'Vert. and Horz.', or 'None'"
+                    },
+                    "vertical_insulation": {
+                        "type": "number",
+                        "description": "Vertical insulation R-value"
+                    },
+                    "wing_insulation": {
+                        "type": "number",
+                        "description": "Horizontal wing insulation R-value"
+                    },
+                    "corner_insulation": {
+                        "type": "number",
+                        "description": "Corner insulation R-value"
+                    },
+                    "dim_a": {
+                        "type": "number",
+                        "description": "FPSF dimension A in inches"
+                    },
+                    "dim_b": {
+                        "type": "number",
+                        "description": "FPSF dimension B in inches"
+                    },
+                    "dim_c": {
+                        "type": "number",
+                        "description": "FPSF dimension C in inches"
+                    },
+                    "slab_insulation_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) slab insulation"
+                    },
+                    "slab_insulation": {
+                        "type": "number",
+                        "description": "Slab insulation R-value"
+                    },
+                    "subbase_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) subbase layer beneath slab"
+                    },
+                    "subbase_depth": {
+                        "type": "number",
+                        "description": "Subbase depth in inches"
+                    },
+                    "subbase_material": {
+                        "type": "string",
+                        "description": "Subbase material: 'Gravel', 'Stone1', or 'corrugated_metal'"
+                    },
+                    "drain_enabled": {
+                        "type": "boolean",
+                        "description": "Enable (true) or disable (false) perimeter drain"
+                    }
+                },
+                "required": ["group_name"]
+            },
+        ),
+
         # ── Execute Ruby ───────────────────────────────────────────────────
 
         types.Tool(
@@ -737,7 +1209,9 @@ async def list_tools() -> list[types.Tool]:
                 "The code runs in the context of the SU_MCP module and has full access "
                 "to the SketchUp Ruby API (Sketchup, Geom, UI, etc.). "
                 "Returns the result of the last expression and any puts/print output. "
-                "Use with care — this can modify or delete model data."
+                "Use with care — this can modify or delete model data. "
+                "\n\n**IMPORTANT: Do NOT use this tool to create foundations, slabs, footers, or trusses.** "
+                "Use the specialized construction tools instead: create_foundation for slabs/footers, create_roof_truss for trusses."
             ),
             inputSchema={
                 "type": "object",
@@ -830,6 +1304,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         elif name == "create_wall":
             return ok(await su_post("/construction/wall", arguments))
+
+        elif name == "create_foundation":
+            return ok(await su_post("/construction/foundation", arguments))
+
+        elif name == "read_foundation_attributes":
+            return ok(await su_post("/construction/foundation/read_attributes", arguments))
+
+        elif name == "read_foundation_attribute":
+            return ok(await su_post("/construction/foundation/read_attribute", arguments))
+
+        elif name == "modify_foundation":
+            return ok(await su_post("/construction/foundation/modify", arguments))
 
         # ── Execute Ruby ───────────────────────────────────────────────────
         elif name == "execute_ruby":

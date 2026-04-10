@@ -593,6 +593,91 @@ module SU_MCP
     Construction::Wall.create(params)
   end
 
+  # Foundation handler - uses Medeek if available
+  def self.handle_create_foundation(params = {})
+    if Construction::MedeekFoundation.available?
+      begin
+        result = Construction::MedeekFoundation.create(params)
+        # If Medeek succeeded, return its result
+        if result && result[:status] == 'created'
+          return result
+        else
+          # Medeek failed to create foundation
+          error_msg = "Medeek Foundation Plugin failed to create foundation. This may be due to invalid parameters or license issues."
+          log "[SU_MCP] #{error_msg}"
+          return {
+            status: 'failed',
+            engine: 'none',
+            message: error_msg
+          }
+        end
+      rescue => e
+        error_msg = "Medeek Foundation Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return {
+          status: 'failed',
+          engine: 'medeek (error)',
+          message: error_msg
+        }
+      end
+    else
+      # Medeek not installed
+      log "[SU_MCP] Medeek Foundation Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Foundation Plugin not installed. Please install from SketchUp Extension Warehouse for foundation creation."
+      }
+    end
+  end
+
+  # Foundation reader handlers
+  def self.handle_read_foundation_attributes(params = {})
+    Construction::MedeekFoundationReader.read_all_attributes(params)
+  end
+
+  def self.handle_read_foundation_attribute(params = {})
+    Construction::MedeekFoundationReader.read_attribute(params)
+  end
+
+  # Foundation modifier handler
+  def self.handle_modify_foundation(params = {})
+    if Construction::MedeekFoundation.available?
+      begin
+        result = Construction::MedeekFoundation.modify(params)
+        # If Medeek succeeded, return its result
+        if result && result[:status] == 'modified'
+          return result
+        else
+          # Medeek failed to modify foundation
+          error_msg = "Medeek Foundation Plugin failed to modify foundation. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return {
+            status: 'failed',
+            engine: 'none',
+            message: error_msg
+          }
+        end
+      rescue => e
+        error_msg = "Medeek Foundation Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return {
+          status: 'failed',
+          engine: 'medeek (error)',
+          message: error_msg
+        }
+      end
+    else
+      # Medeek not installed
+      log "[SU_MCP] Medeek Foundation Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Foundation Plugin not installed. Please install from SketchUp Extension Warehouse."
+      }
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # HTTP Server (using TCPServer instead of WEBrick for Ruby 3.2+)
   # ---------------------------------------------------------------------------
@@ -623,8 +708,12 @@ module SU_MCP
     ['POST', '/components/create'] => :handle_create_component,
     ['POST', '/components/place']  => :handle_place_component,
     # POST - Construction
-    ['POST', '/construction/roof_truss'] => :handle_create_roof_truss,
-    ['POST', '/construction/wall']       => :handle_create_wall,
+    ['POST', '/construction/roof_truss']  => :handle_create_roof_truss,
+    ['POST', '/construction/wall']        => :handle_create_wall,
+    ['POST', '/construction/foundation']  => :handle_create_foundation,
+    ['POST', '/construction/foundation/read_attributes'] => :handle_read_foundation_attributes,
+    ['POST', '/construction/foundation/read_attribute']  => :handle_read_foundation_attribute,
+    ['POST', '/construction/foundation/modify']          => :handle_modify_foundation,
     # POST - Ruby
     ['POST', '/ruby/execute']      => :handle_execute_ruby,
   }

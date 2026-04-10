@@ -9,3 +9,5 @@ end
 require_relative 'construction/roof_truss'
 require_relative 'construction/wall'
 require_relative 'construction/medeek_truss'
+require_relative 'construction/medeek_foundation'
+require_relative 'construction/medeek_foundation_reader'
