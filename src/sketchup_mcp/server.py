@@ -1200,6 +1200,364 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
 
+        # ── Wall Tools (Medeek Wall Plugin) ────────────────────────────────
+
+        types.Tool(
+            name="create_medeek_wall",
+            description=(
+                "Create a single wall between two points using Medeek Wall Plugin. "
+                "**USE THIS TOOL for any request involving: walls, wall framing, studs, exterior walls, interior walls.** "
+                "\n\n"
+                "Supports 4 wall families (Rectangular, Gable, Shed, Hip) and 2 wall types (Int-Ext, Int-Int). "
+                "Creates professional wall assemblies with proper framing, studs, plates, and sheathing."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "start_point": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Wall start point [x, y, z] in inches"
+                    },
+                    "end_point": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Wall end point [x, y, z] in inches"
+                    },
+                    "wall_family": {
+                        "type": "string",
+                        "enum": ["Rectangular", "Gable", "Shed", "Hip"],
+                        "description": "Wall family type. Default: Rectangular"
+                    },
+                    "wall_type": {
+                        "type": "string",
+                        "enum": ["Int-Ext", "Int-Int"],
+                        "description": "Wall type (Int-Ext for exterior, Int-Int for interior). Default: Int-Ext"
+                    }
+                },
+                "required": ["start_point", "end_point"]
+            },
+        ),
+
+        types.Tool(
+            name="create_wall_perimeter",
+            description=(
+                "Create a complete wall perimeter from a polygon outline using Medeek Wall Plugin. "
+                "**USE THIS TOOL to create walls around a foundation, building outline, or room perimeter.** "
+                "\n\n"
+                "Automatically creates walls along each edge of the polygon with proper corners and connections."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "outline_points": {
+                        "type": "array",
+                        "description": "Ordered list of [x,y,z] points defining the perimeter. Minimum 3 points.",
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "minItems": 3,
+                            "maxItems": 3,
+                        },
+                        "minItems": 3,
+                    },
+                    "wall_family": {
+                        "type": "string",
+                        "enum": ["Rectangular", "Gable", "Shed", "Hip"],
+                        "description": "Wall family type. Default: Rectangular"
+                    },
+                    "wall_type": {
+                        "type": "string",
+                        "enum": ["Int-Ext", "Int-Int"],
+                        "description": "Wall type. Default: Int-Ext"
+                    }
+                },
+                "required": ["outline_points"]
+            },
+        ),
+
+        types.Tool(
+            name="read_wall_attributes",
+            description="Read all attributes from an existing Medeek Wall assembly. Returns all wall parameters.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    }
+                },
+                "required": ["group_name"]
+            },
+        ),
+
+        types.Tool(
+            name="read_wall_attribute",
+            description="Read a specific attribute from an existing Medeek Wall assembly.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "attribute_name": {
+                        "type": "string",
+                        "description": "Name of the attribute to read"
+                    }
+                },
+                "required": ["group_name", "attribute_name"]
+            },
+        ),
+
+        types.Tool(
+            name="modify_wall_attribute",
+            description="Modify a parameter on an existing Medeek Wall. Use to change wall properties after creation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "attribute_name": {
+                        "type": "string",
+                        "description": "Parameter to modify"
+                    },
+                    "attribute_value": {
+                        "description": "New value for the parameter"
+                    }
+                },
+                "required": ["group_name", "attribute_name", "attribute_value"]
+            },
+        ),
+
+        types.Tool(
+            name="add_window",
+            description=(
+                "Add a window to an existing Medeek Wall. "
+                "Supports 9 geometry types: RECT (rectangular), ARCH (arched), RAKE (raked), "
+                "ELLIP (elliptical), TRAPZ (trapezoidal), CIRCL (circular), TRIANGLE (triangular), "
+                "POLYGON (polygonal), LWRARCH (lower arched)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name to add window to"
+                    },
+                    "window_type": {
+                        "type": "string",
+                        "enum": ["RECT", "ARCH", "RAKE", "ELLIP", "TRAPZ", "CIRCL", "TRIANGLE", "POLYGON", "LWRARCH"],
+                        "description": "Window geometry type"
+                    },
+                    "position": {
+                        "type": "number",
+                        "description": "Distance from wall start in inches"
+                    },
+                    "width": {
+                        "type": "number",
+                        "description": "Window width in inches"
+                    },
+                    "height": {
+                        "type": "number",
+                        "description": "Window height in inches"
+                    },
+                    "sill_height": {
+                        "type": "number",
+                        "description": "Height of window sill from floor in inches"
+                    }
+                },
+                "required": ["wall_group_name", "window_type", "position", "width", "height"]
+            },
+        ),
+
+        types.Tool(
+            name="read_window_attributes",
+            description="Read attributes from a window in a Medeek Wall.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "window_index": {
+                        "type": "number",
+                        "description": "Window index (0-based)"
+                    }
+                },
+                "required": ["wall_group_name", "window_index"]
+            },
+        ),
+
+        types.Tool(
+            name="add_door",
+            description=(
+                "Add a door to an existing Medeek Wall. "
+                "Supports 2 geometry types: RECT (rectangular), ARCH (arched)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name to add door to"
+                    },
+                    "door_type": {
+                        "type": "string",
+                        "enum": ["RECT", "ARCH"],
+                        "description": "Door geometry type"
+                    },
+                    "position": {
+                        "type": "number",
+                        "description": "Distance from wall start in inches"
+                    },
+                    "width": {
+                        "type": "number",
+                        "description": "Door width in inches"
+                    },
+                    "height": {
+                        "type": "number",
+                        "description": "Door height in inches"
+                    }
+                },
+                "required": ["wall_group_name", "door_type", "position", "width", "height"]
+            },
+        ),
+
+        types.Tool(
+            name="read_door_attributes",
+            description="Read attributes from a door in a Medeek Wall.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "door_index": {
+                        "type": "number",
+                        "description": "Door index (0-based)"
+                    }
+                },
+                "required": ["wall_group_name", "door_index"]
+            },
+        ),
+
+        types.Tool(
+            name="add_garage_door",
+            description=(
+                "Add a garage door to an existing Medeek Wall. "
+                "Supports 3 geometry types: RECT (rectangular), ARCH (arched), RAKE (raked)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name to add garage door to"
+                    },
+                    "garage_type": {
+                        "type": "string",
+                        "enum": ["RECT", "ARCH", "RAKE"],
+                        "description": "Garage door geometry type"
+                    },
+                    "position": {
+                        "type": "number",
+                        "description": "Distance from wall start in inches"
+                    },
+                    "width": {
+                        "type": "number",
+                        "description": "Garage door width in inches"
+                    },
+                    "height": {
+                        "type": "number",
+                        "description": "Garage door height in inches"
+                    }
+                },
+                "required": ["wall_group_name", "garage_type", "position", "width", "height"]
+            },
+        ),
+
+        types.Tool(
+            name="read_garage_attributes",
+            description="Read attributes from a garage door in a Medeek Wall.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "garage_index": {
+                        "type": "number",
+                        "description": "Garage door index (0-based)"
+                    }
+                },
+                "required": ["wall_group_name", "garage_index"]
+            },
+        ),
+
+        types.Tool(
+            name="add_column",
+            description=(
+                "Add a column to an existing Medeek Wall. "
+                "Supports 7 material types: STEEL, WOOD, CONCRETE, BRICK, STONE, ALUMINUM, COMPOSITE."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name to add column to"
+                    },
+                    "column_material": {
+                        "type": "string",
+                        "enum": ["STEEL", "WOOD", "CONCRETE", "BRICK", "STONE", "ALUMINUM", "COMPOSITE"],
+                        "description": "Column material type"
+                    },
+                    "position": {
+                        "type": "number",
+                        "description": "Distance from wall start in inches"
+                    },
+                    "width": {
+                        "type": "number",
+                        "description": "Column width in inches"
+                    },
+                    "depth": {
+                        "type": "number",
+                        "description": "Column depth in inches"
+                    }
+                },
+                "required": ["wall_group_name", "column_material", "position", "width", "depth"]
+            },
+        ),
+
+        types.Tool(
+            name="read_column_attributes",
+            description="Read attributes from a column in a Medeek Wall.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wall_group_name": {
+                        "type": "string",
+                        "description": "Wall group name"
+                    },
+                    "column_index": {
+                        "type": "number",
+                        "description": "Column index (0-based)"
+                    }
+                },
+                "required": ["wall_group_name", "column_index"]
+            },
+        ),
+
         # ── Execute Ruby ───────────────────────────────────────────────────
 
         types.Tool(
@@ -1316,6 +1674,45 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         elif name == "modify_foundation":
             return ok(await su_post("/construction/foundation/modify", arguments))
+
+        elif name == "create_medeek_wall":
+            return ok(await su_post("/construction/wall/create", arguments))
+
+        elif name == "create_wall_perimeter":
+            return ok(await su_post("/construction/wall/perimeter", arguments))
+
+        elif name == "read_wall_attributes":
+            return ok(await su_post("/construction/wall/read_attributes", arguments))
+
+        elif name == "read_wall_attribute":
+            return ok(await su_post("/construction/wall/read_attribute", arguments))
+
+        elif name == "modify_wall_attribute":
+            return ok(await su_post("/construction/wall/modify", arguments))
+
+        elif name == "add_window":
+            return ok(await su_post("/construction/wall/window", arguments))
+
+        elif name == "read_window_attributes":
+            return ok(await su_post("/construction/wall/window/read_attributes", arguments))
+
+        elif name == "add_door":
+            return ok(await su_post("/construction/wall/door", arguments))
+
+        elif name == "read_door_attributes":
+            return ok(await su_post("/construction/wall/door/read_attributes", arguments))
+
+        elif name == "add_garage_door":
+            return ok(await su_post("/construction/wall/garage", arguments))
+
+        elif name == "read_garage_attributes":
+            return ok(await su_post("/construction/wall/garage/read_attributes", arguments))
+
+        elif name == "add_column":
+            return ok(await su_post("/construction/wall/column", arguments))
+
+        elif name == "read_column_attributes":
+            return ok(await su_post("/construction/wall/column/read_attributes", arguments))
 
         # ── Execute Ruby ───────────────────────────────────────────────────
         elif name == "execute_ruby":

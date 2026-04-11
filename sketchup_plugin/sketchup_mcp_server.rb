@@ -679,6 +679,216 @@ module SU_MCP
   end
 
   # ---------------------------------------------------------------------------
+  # Wall handlers (Medeek Wall Plugin)
+  # ---------------------------------------------------------------------------
+
+  def self.handle_create_medeek_wall(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.create_wall(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to create wall. This may be due to invalid parameters or license issues."
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed. Please install from SketchUp Extension Warehouse for wall creation."
+      }
+    end
+  end
+
+  def self.handle_create_wall_perimeter(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.create_wall_perimeter(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to create wall perimeter. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_read_wall_attributes(params = {})
+    Construction::MedeekWall.read_wall_attributes(params)
+  end
+
+  def self.handle_read_wall_attribute(params = {})
+    Construction::MedeekWall.read_wall_attribute(params)
+  end
+
+  def self.handle_modify_wall_attribute(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.modify_wall_attribute(params)
+        if result && result[:status] == 'modified'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to modify wall attribute. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_add_window(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.add_window(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to add window. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_read_window_attributes(params = {})
+    Construction::MedeekWall.read_window_attributes(params)
+  end
+
+  def self.handle_add_door(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.add_door(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to add door. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_read_door_attributes(params = {})
+    Construction::MedeekWall.read_door_attributes(params)
+  end
+
+  def self.handle_add_garage_door(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.add_garage_door(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to add garage door. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_read_garage_attributes(params = {})
+    Construction::MedeekWall.read_garage_attributes(params)
+  end
+
+  def self.handle_add_column(params = {})
+    if Construction::MedeekWall.available?
+      begin
+        result = Construction::MedeekWall.add_column(params)
+        if result && result[:status] == 'created'
+          return result
+        else
+          error_msg = "Medeek Wall Plugin failed to add column. #{result[:message] if result}"
+          log "[SU_MCP] #{error_msg}"
+          return { status: 'failed', engine: 'none', message: error_msg }
+        end
+      rescue => e
+        error_msg = "Medeek Wall Plugin error: #{e.message}"
+        log "[SU_MCP] #{error_msg}"
+        return { status: 'failed', engine: 'medeek (error)', message: error_msg }
+      end
+    else
+      log "[SU_MCP] Medeek Wall Plugin not detected"
+      return {
+        status: 'failed',
+        engine: 'none',
+        message: "Medeek Wall Plugin not installed."
+      }
+    end
+  end
+
+  def self.handle_read_column_attributes(params = {})
+    Construction::MedeekWall.read_column_attributes(params)
+  end
+
+  # ---------------------------------------------------------------------------
   # HTTP Server (using TCPServer instead of WEBrick for Ruby 3.2+)
   # ---------------------------------------------------------------------------
 
@@ -714,6 +924,19 @@ module SU_MCP
     ['POST', '/construction/foundation/read_attributes'] => :handle_read_foundation_attributes,
     ['POST', '/construction/foundation/read_attribute']  => :handle_read_foundation_attribute,
     ['POST', '/construction/foundation/modify']          => :handle_modify_foundation,
+    ['POST', '/construction/wall/create']                => :handle_create_medeek_wall,
+    ['POST', '/construction/wall/perimeter']             => :handle_create_wall_perimeter,
+    ['POST', '/construction/wall/read_attributes']       => :handle_read_wall_attributes,
+    ['POST', '/construction/wall/read_attribute']        => :handle_read_wall_attribute,
+    ['POST', '/construction/wall/modify']                => :handle_modify_wall_attribute,
+    ['POST', '/construction/wall/window']                => :handle_add_window,
+    ['POST', '/construction/wall/window/read_attributes'] => :handle_read_window_attributes,
+    ['POST', '/construction/wall/door']                  => :handle_add_door,
+    ['POST', '/construction/wall/door/read_attributes']  => :handle_read_door_attributes,
+    ['POST', '/construction/wall/garage']                => :handle_add_garage_door,
+    ['POST', '/construction/wall/garage/read_attributes'] => :handle_read_garage_attributes,
+    ['POST', '/construction/wall/column']                => :handle_add_column,
+    ['POST', '/construction/wall/column/read_attributes'] => :handle_read_column_attributes,
     # POST - Ruby
     ['POST', '/ruby/execute']      => :handle_execute_ruby,
   }
