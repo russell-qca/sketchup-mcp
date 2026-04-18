@@ -585,16 +585,19 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="create_roof_truss",
             description=(
-                "DIRECTLY create professional engineered roof trusses in SketchUp using Medeek Truss Plugin. "
-                "IMPORTANT: ONE CALL creates ALL trusses - use the 'count' parameter to specify how many. "
-                "For example, to create 5 trusses, call this tool ONCE with count=5, NOT 5 separate calls. "
+                "Create BASIC roof trusses using Medeek Truss Plugin. This creates trusses with DEFAULT settings (pitch, type, geometry only).\n\n"
+                "**IMPORTANT: This tool ONLY creates the basic truss structure. To add advanced features (sheathing, fascia, cladding, etc.), use the 'modify_truss' tool AFTER creation.**\n\n"
                 "Supports 14 truss types: king, queen, fink, howe, fan, mod_queen, double_fink, double_howe, "
-                "mod_fan, triple_fink, triple_howe, quad_fink, quad_howe, penta_howe. "
-                "Creates complete 3D models with proper web patterns, angled members, and realistic connections.\n\n"
-                "CRITICAL WORKFLOW RULES:\n"
-                "1. NEVER create test or exploratory geometry in the model to verify calculations. All geometry decisions must be derived from querying existing model data (bounding boxes, entity positions, tags, etc.) BEFORE creating any final geometry. If verification is needed, do it through Ruby queries using execute_ruby - never by placing temporary objects in the model.\n\n"
-                "2. After calling create_roof_truss, ALWAYS use execute_ruby to audit the top-level model entities for any residual or misplaced groups (e.g., individual Fink_Truss_* groups not inside TRUSS_ASSEMBLY, or groups at incorrect Z elevations or outside expected bounds). Delete any stray groups before reporting completion.\n\n"
-                "3. If a 'layer' parameter was provided, immediately use execute_ruby after truss creation to assign the TRUSS_ASSEMBLY group to that tag/layer. Do not leave it on Layer0."
+                "mod_fan, triple_fink, triple_howe, quad_fink, quad_howe, penta_howe.\n\n"
+                "**WORKFLOW for trusses with features:**\n"
+                "1. Call create_roof_truss (creates basic trusses)\n"
+                "2. Call modify_truss with advanced options (adds sheathing, fascia, etc.)\n\n"
+                "**GABLE WALL ORIENTATION:**\n"
+                "The top_plate_corners must be ordered so that the FIRST and THIRD edges define the GABLE walls (short walls, non-bearing), and the SECOND and FOURTH edges define the BEARING walls (long walls where trusses sit).\n\n"
+                "**CRITICAL RULES:**\n"
+                "1. NEVER create test geometry. Query existing model data BEFORE creating.\n"
+                "2. After calling this tool, use execute_ruby to audit for stray groups and clean up.\n"
+                "3. If layer parameter provided, assign the group to that layer after creation."
             ),
             inputSchema={
                 "type": "object",
@@ -643,7 +646,29 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "top_plate_corners": {
                         "type": "array",
-                        "description": "PREFERRED when framing exists: Provide the 4 outer corner points from the top of the top plate face. Format: [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], [x4,y4,z4]] in order front-left, front-right, back-right, back-left. IMPORTANT: Just pass the face corners AS-IS - do NOT calculate or adjust for truss positions. Medeek automatically determines truss count and placement based on the parallelogram.",
+                        "description": (
+                            "Provide the 4 outer corner points from the top of the top plate face. Format: [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], [x4,y4,z4]].\n\n"
+                            "CRITICAL — Gable wall rule: The FIRST edge (points 1→2) defines the FRONT GABLE wall, and the THIRD edge (points 3→4) defines the BACK GABLE wall. These are the short, non-bearing walls. The SECOND edge (points 2→3) and FOURTH edge (points 4→1) are the BEARING walls (long walls where truss heels sit). Trusses span between the bearing walls and repeat along the gable walls.\n\n"
+                            "To determine which points go where:\n"
+                            "1. Identify the GABLE walls (short walls, non-bearing). These are perpendicular to the truss span.\n"
+                            "2. Identify the BEARING walls (long walls where trusses sit). The span is the distance between these walls.\n"
+                            "3. Point 1 = left corner of front gable wall. Point 2 = right corner of front gable wall.\n"
+                            "4. Point 3 = right corner of back gable wall (opposite point 2). Point 4 = left corner of back gable wall (opposite point 1).\n"
+                            "5. The truss span is the distance from point 1 to point 4 (or point 2 to point 3).\n"
+                            "6. Trusses repeat along the distance from point 1 to point 2 (or point 4 to point 3).\n\n"
+                            "Example — 40'×60' building, trusses bear on the 60' long walls, span across the 40' dimension:\n"
+                            "- Span = 40' (480\"). Trusses repeat along the 60' (720\") dimension.\n"
+                            "- Front gable wall (40' wide) at Y=0, running X=0 to X=480.\n"
+                            "- Back gable wall (40' wide) at Y=720, running X=0 to X=480.\n"
+                            "- Left bearing wall (60' long) at X=0, running Y=0 to Y=720.\n"
+                            "- Right bearing wall (60' long) at X=480, running Y=0 to Y=720.\n"
+                            "- Correct corners: [[0,0,z], [480,0,z], [480,720,z], [0,720,z]]\n"
+                            "- First edge (0,0 → 480,0) = 40' front gable wall ✓\n"
+                            "- Second edge (480,0 → 480,720) = 60' right bearing wall ✓\n"
+                            "- Third edge (480,720 → 0,720) = 40' back gable wall ✓\n"
+                            "- Fourth edge (0,720 → 0,0) = 60' left bearing wall ✓\n\n"
+                            "Common mistake to avoid: Do NOT order the corners so that the first edge runs along a bearing wall. The first and third edges must be the gable walls (short walls)."
+                        ),
                         "items": {
                             "type": "array",
                             "items": {"type": "number"},
@@ -755,6 +780,10 @@ async def list_tools() -> list[types.Tool]:
                 "Requires Medeek Foundation Plugin to be installed and licensed. "
                 "Creates professional foundation with footing (footer), concrete slab, optional garage curb, optional rebar reinforcement, and optional anchor bolts. "
                 "Supports top/bottom footing bars, slab reinforcement (welded wire fabric), anchor bolts with sill plate configuration. "
+                "\n\n"
+                "**CRITICAL: This tool returns 'slab_top_z' in the response** - the authoritative Z position of the top of slab surface. "
+                "**ALWAYS use this slab_top_z value when placing walls, framing, or any geometry on top of the foundation.** "
+                "Do NOT assume Z=0, do NOT calculate offsets - use the returned slab_top_z value directly for accurate wall placement."
                 "\n\n"
                 "Common use cases: 'create a 40x60 slab', 'concrete slab with footer', 'foundation with rebar', 'slab-on-grade foundation'."
             ),
@@ -1014,6 +1043,36 @@ async def list_tools() -> list[types.Tool]:
         ),
 
         types.Tool(
+            name="get_foundation_info",
+            description=(
+                "Get foundation information from an existing slab-on-grade foundation in the model. "
+                "**CRITICAL: USE THIS TOOL to query the exact slab_top_z value before placing walls on a foundation.** "
+                "\n\n"
+                "This tool reads the foundation from the model and returns the authoritative slab_top_z value "
+                "that should be used for wall placement. Do NOT assume the slab starts at Z=0 or guess the "
+                "slab thickness - always query the foundation first.\n\n"
+                "Returns: slab_top_z (the Z coordinate of the top of the concrete slab where walls sit), "
+                "outline_points (with Z coordinates set to slab_top_z for easy wall placement), "
+                "and other foundation parameters.\n\n"
+                "**WORKFLOW FOR PLACING WALLS ON FOUNDATION:**\n"
+                "1. Call get_foundation_info to get slab_top_z\n"
+                "2. Use the returned slab_top_z for all wall Z coordinates\n"
+                "3. Use outline_points for wall perimeter placement (already at correct Z)\n\n"
+                "If no group_name provided, will find the first foundation in the model."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Foundation group name (optional). If not provided, will find any foundation in the model."
+                    }
+                },
+                "required": []
+            },
+        ),
+
+        types.Tool(
             name="modify_foundation",
             description=(
                 "Modify an EXISTING slab-on-grade foundation created by Medeek Foundation Plugin. "
@@ -1208,7 +1267,17 @@ async def list_tools() -> list[types.Tool]:
                 "Create a single wall between two points using Medeek Wall Plugin. "
                 "**USE THIS TOOL for any request involving: walls, wall framing, studs, exterior walls, interior walls.** "
                 "\n\n"
-                "Supports 4 wall families (Rectangular, Gable, Shed, Hip) and 2 wall types (Int-Ext, Int-Int). "
+                "**CRITICAL WORKFLOW for placing walls on a foundation:**\n"
+                "1. FIRST call get_foundation_info to query the exact slab_top_z value from the model\n"
+                "2. Use that slab_top_z value for the Z coordinate in start_point and end_point\n"
+                "3. DO NOT assume the slab is at Z=0 or guess the slab thickness\n"
+                "Example: get_foundation_info returns slab_top_z=-14.0, use [x, y, -14.0] for wall points.\n\n"
+                "**CRITICAL - Wall Family Selection:**\n"
+                "- **Rectangular (DEFAULT)**: Standard wall with flat top plate at consistent height. USE THIS unless user explicitly requests gables.\n"
+                "- **Gable**: Wall with peaked top (triangle shape) to meet sloped roof. ONLY use if user specifically requests gable ends.\n"
+                "- **Shed**: Wall with sloped top. ONLY use if explicitly requested.\n"
+                "- **Hip**: Wall for hip roof. ONLY use if explicitly requested.\n"
+                "**DO NOT create gables automatically** - default to Rectangular for all standard walls.\n\n"
                 "Creates professional wall assemblies with proper framing, studs, plates, and sheathing."
             ),
             inputSchema={
@@ -1231,7 +1300,7 @@ async def list_tools() -> list[types.Tool]:
                     "wall_family": {
                         "type": "string",
                         "enum": ["Rectangular", "Gable", "Shed", "Hip"],
-                        "description": "Wall family type. Default: Rectangular"
+                        "description": "Wall family type. ALWAYS use 'Rectangular' (default) for standard walls with flat top plates. ONLY use 'Gable', 'Shed', or 'Hip' if user explicitly requests peaked/sloped walls."
                     },
                     "wall_type": {
                         "type": "string",
@@ -1249,6 +1318,16 @@ async def list_tools() -> list[types.Tool]:
                 "Create a complete wall perimeter from a polygon outline using Medeek Wall Plugin. "
                 "**USE THIS TOOL to create walls around a foundation, building outline, or room perimeter.** "
                 "\n\n"
+                "**CRITICAL WORKFLOW for placing walls on a foundation:**\n"
+                "1. FIRST call get_foundation_info to query the exact slab_top_z and outline_points\n"
+                "2. Use the returned outline_points directly (already at correct Z) OR use slab_top_z for custom points\n"
+                "3. DO NOT assume the slab is at Z=0 or guess dimensions\n"
+                "Example: get_foundation_info returns outline_points=[[0,0,-14], [720,0,-14], ...], use those points directly.\n\n"
+                "**CRITICAL - Wall Family Selection:**\n"
+                "- **Rectangular (DEFAULT)**: Standard walls with flat top plate at consistent height. USE THIS unless user explicitly requests gables.\n"
+                "- **Gable**: Walls with peaked tops (triangle shape) to meet sloped roof. ONLY use if user specifically requests gable ends.\n"
+                "- **Shed/Hip**: ONLY use if explicitly requested.\n"
+                "**DO NOT create gables automatically** - default to Rectangular for all standard building perimeters.\n\n"
                 "Automatically creates walls along each edge of the polygon with proper corners and connections."
             ),
             inputSchema={
@@ -1268,7 +1347,7 @@ async def list_tools() -> list[types.Tool]:
                     "wall_family": {
                         "type": "string",
                         "enum": ["Rectangular", "Gable", "Shed", "Hip"],
-                        "description": "Wall family type. Default: Rectangular"
+                        "description": "Wall family type. ALWAYS use 'Rectangular' (default) for standard walls with flat top plates. ONLY use 'Gable', 'Shed', or 'Hip' if user explicitly requests peaked/sloped walls."
                     },
                     "wall_type": {
                         "type": "string",
@@ -1316,49 +1395,107 @@ async def list_tools() -> list[types.Tool]:
 
         types.Tool(
             name="modify_wall_attribute",
-            description="Modify a parameter on an existing Medeek Wall. Use to change wall properties after creation.",
+            description=(
+                "Modify a Medeek Wall attribute after creation. Passes attribute_name and value directly to Medeek API - no conversion or interpretation.\n\n"
+                "**CRITICAL - Value Format Rules:**\n"
+                "- Dimensions/numbers: Pass as numeric values (e.g., 96.0, 12.0, -0.5)\n"
+                "- Options/toggles: MUST pass as literal strings 'YES' or 'NO' (NOT true/false, NOT boolean)\n"
+                "- Lumber sizes: Pass as strings (e.g., '2X4', '2X6', '2X8')\n"
+                "- Material names: Pass as strings\n\n"
+                "**Common Wall Attributes:**\n"
+                "Dimensions (numeric values):\n"
+                "- WALLHEIGHT: Wall height in inches (e.g., 96.0, 108.0)\n"
+                "- WALLSHEATHVERTOFFSET_B: Sheathing vertical extension bottom in inches (can be negative, e.g., -0.5, 0.0, 2.0)\n"
+                "- WALLSHEATHVERTOFFSET_T: Sheathing vertical extension top in inches (can be negative)\n"
+                "- WALLCLADVERTOFFSET_B: Cladding vertical extension bottom in inches (can be negative)\n"
+                "- WALLCLADVERTOFFSET_T: Cladding vertical extension top in inches (can be negative)\n"
+                "- STUDSPACING: Stud spacing in inches (12, 16, 19.2, or 24)\n\n"
+                "Options (string 'YES' or 'NO'):\n"
+                "- WALLSHEATHOPTION: Enable/disable wall sheathing (value='YES' or value='NO')\n"
+                "- WALLCLADOPTION: Enable/disable wall cladding (value='YES' or value='NO')\n"
+                "- WALLGIRTOPTION: Enable/disable wall girts (value='YES' or value='NO')\n\n"
+                "Lumber/Material (string values):\n"
+                "- STUDWIDTH: Stud width (value='2X4', value='2X6', or value='2X8')\n"
+                "- PLATEWIDTH: Top/bottom plate width (value='2X4', value='2X6', or value='2X8')\n"
+                "- GIRTWIDTH: Girt width (value='2X4' or value='2X6')\n"
+                "- WALLSHEATHMAT: Sheathing material name (string)\n"
+                "- WALLCLADMAT: Cladding material name (string)\n\n"
+                "**Usage Examples:**\n"
+                "- Change wall height: attribute_name='WALLHEIGHT', value=108.0\n"
+                "- Enable sheathing: attribute_name='WALLSHEATHOPTION', value='YES'\n"
+                "- Change studs: attribute_name='STUDWIDTH', value='2X6'"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "group_name": {
                         "type": "string",
-                        "description": "Wall group name"
+                        "description": "Wall group name to modify"
                     },
                     "attribute_name": {
                         "type": "string",
-                        "description": "Parameter to modify"
+                        "description": "Medeek wall attribute name (see tool description for common attributes)"
                     },
-                    "attribute_value": {
-                        "description": "New value for the parameter"
+                    "value": {
+                        "description": "Attribute value - EXACT format required: numeric for dimensions (e.g., 96.0), string 'YES' or 'NO' for options (NOT true/false), string for lumber sizes (e.g., '2X6')"
+                    },
+                    "regenerate": {
+                        "type": "boolean",
+                        "description": "Regenerate the wall after modifying (true). Set to false for batch changes to avoid regenerating after each change. Default: true"
                     }
                 },
-                "required": ["group_name", "attribute_name", "attribute_value"]
+                "required": ["group_name", "attribute_name", "value"]
+            },
+        ),
+
+        types.Tool(
+            name="get_wall_info",
+            description=(
+                "Query authoritative wall geometry and dimensions from an existing Medeek Wall. "
+                "Returns critical information needed for placing trusses, roofs, or other elements on top of walls.\n\n"
+                "**CRITICAL WORKFLOW for placing trusses on walls:**\n"
+                "1. FIRST call get_wall_info to query the exact top_plate_z and wall dimensions\n"
+                "2. Use the returned top_plate_z for truss placement (DO NOT calculate or guess)\n"
+                "3. Use wall_start and wall_end to calculate proper truss span\n\n"
+                "**Returned Information:**\n"
+                "- top_plate_z: Z coordinate of the top of the wall top plate (in inches)\n"
+                "- base_z: Z coordinate of the bottom of the wall\n"
+                "- wall_height: Total wall height in inches\n"
+                "- wall_start: [x,y,z] start point of wall\n"
+                "- wall_end: [x,y,z] end point of wall\n"
+                "- wall_length: Wall length in inches\n"
+                "- stud_spacing: Stud spacing in inches\n"
+                "- plate_width: Top/bottom plate lumber size (e.g., '2X4', '2X6')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name to query (optional - uses selection if not provided)"
+                    }
+                },
+                "required": []
             },
         ),
 
         types.Tool(
             name="add_window",
             description=(
-                "Add a window to an existing Medeek Wall. "
-                "Supports 9 geometry types: RECT (rectangular), ARCH (arched), RAKE (raked), "
-                "ELLIP (elliptical), TRAPZ (trapezoidal), CIRCL (circular), TRIANGLE (triangular), "
-                "POLYGON (polygonal), LWRARCH (lower arched)."
+                "Add a SINGLE window to an existing Medeek Wall. "
+                "Creates window opening with optional window unit, trim, and casing. "
+                "**Important: Each call creates ONE window. For multiple windows, make separate calls (can be done in parallel).**"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "group_name": {
                         "type": "string",
                         "description": "Wall group name to add window to"
                     },
-                    "window_type": {
-                        "type": "string",
-                        "enum": ["RECT", "ARCH", "RAKE", "ELLIP", "TRAPZ", "CIRCL", "TRIANGLE", "POLYGON", "LWRARCH"],
-                        "description": "Window geometry type"
-                    },
-                    "position": {
+                    "location": {
                         "type": "number",
-                        "description": "Distance from wall start in inches"
+                        "description": "Distance in inches from wall start point to the center of the window placement"
                     },
                     "width": {
                         "type": "number",
@@ -1368,12 +1505,25 @@ async def list_tools() -> list[types.Tool]:
                         "type": "number",
                         "description": "Window height in inches"
                     },
-                    "sill_height": {
-                        "type": "number",
-                        "description": "Height of window sill from floor in inches"
+                    "geometry": {
+                        "type": "string",
+                        "enum": ["Rectangle", "Half Round", "Arch", "Gothic Arch", "Oval", "Octagon", "Hexagon", "Trapezoid", "Pentagon"],
+                        "description": "Window opening geometry/shape. Default: Rectangle"
+                    },
+                    "install_window": {
+                        "type": "boolean",
+                        "description": "Install the window unit in the window opening (true) or create rough opening only (false). Default: true"
+                    },
+                    "exterior_trim": {
+                        "type": "boolean",
+                        "description": "Install exterior trim around the window opening. Default: true"
+                    },
+                    "interior_casing": {
+                        "type": "boolean",
+                        "description": "Install interior casing around the window opening. Default: true"
                     }
                 },
-                "required": ["wall_group_name", "window_type", "position", "width", "height"]
+                "required": ["group_name", "location", "width", "height"]
             },
         ),
 
@@ -1383,40 +1533,36 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "window_name": {
                         "type": "string",
-                        "description": "Wall group name"
+                        "description": "Window name (e.g., 'WINDOW1', 'WINDOW2')"
                     },
-                    "window_index": {
-                        "type": "number",
-                        "description": "Window index (0-based)"
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name (optional - uses selection if not provided)"
                     }
                 },
-                "required": ["wall_group_name", "window_index"]
+                "required": ["window_name"]
             },
         ),
 
         types.Tool(
             name="add_door",
             description=(
-                "Add a door to an existing Medeek Wall. "
-                "Supports 2 geometry types: RECT (rectangular), ARCH (arched)."
+                "Add a SINGLE door to an existing Medeek Wall. "
+                "Creates door opening with optional door unit, trim, and casing. "
+                "**Important: Each call creates ONE door. For multiple doors, make separate calls (can be done in parallel).**"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "group_name": {
                         "type": "string",
                         "description": "Wall group name to add door to"
                     },
-                    "door_type": {
-                        "type": "string",
-                        "enum": ["RECT", "ARCH"],
-                        "description": "Door geometry type"
-                    },
-                    "position": {
+                    "location": {
                         "type": "number",
-                        "description": "Distance from wall start in inches"
+                        "description": "Distance in inches from wall start point to the center of the door placement"
                     },
                     "width": {
                         "type": "number",
@@ -1425,9 +1571,26 @@ async def list_tools() -> list[types.Tool]:
                     "height": {
                         "type": "number",
                         "description": "Door height in inches"
+                    },
+                    "geometry": {
+                        "type": "string",
+                        "enum": ["Rectangle", "Arch"],
+                        "description": "Door opening geometry/shape. Rectangle (rectangular) or Arch (arched top). Default: Rectangle"
+                    },
+                    "install_door": {
+                        "type": "boolean",
+                        "description": "Install the door unit in the door opening (true) or create rough opening only (false). Default: true"
+                    },
+                    "exterior_trim": {
+                        "type": "boolean",
+                        "description": "Install exterior trim around the door opening. Default: true"
+                    },
+                    "interior_casing": {
+                        "type": "boolean",
+                        "description": "Install interior casing around the door opening. Default: true"
                     }
                 },
-                "required": ["wall_group_name", "door_type", "position", "width", "height"]
+                "required": ["group_name", "location", "width", "height"]
             },
         ),
 
@@ -1437,40 +1600,36 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "door_name": {
                         "type": "string",
-                        "description": "Wall group name"
+                        "description": "Door name (e.g., 'DOOR1', 'DOOR2')"
                     },
-                    "door_index": {
-                        "type": "number",
-                        "description": "Door index (0-based)"
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name (optional - uses selection if not provided)"
                     }
                 },
-                "required": ["wall_group_name", "door_index"]
+                "required": ["door_name"]
             },
         ),
 
         types.Tool(
             name="add_garage_door",
             description=(
-                "Add a garage door to an existing Medeek Wall. "
-                "Supports 3 geometry types: RECT (rectangular), ARCH (arched), RAKE (raked)."
+                "Add a SINGLE garage door to an existing Medeek Wall. "
+                "Creates garage door opening with optional door unit, trim, and casing. "
+                "**Important: Each call creates ONE garage door. For multiple garage doors, make separate calls (can be done in parallel).**"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "group_name": {
                         "type": "string",
                         "description": "Wall group name to add garage door to"
                     },
-                    "garage_type": {
-                        "type": "string",
-                        "enum": ["RECT", "ARCH", "RAKE"],
-                        "description": "Garage door geometry type"
-                    },
-                    "position": {
+                    "location": {
                         "type": "number",
-                        "description": "Distance from wall start in inches"
+                        "description": "Distance in inches from wall start point to the center of the garage door placement"
                     },
                     "width": {
                         "type": "number",
@@ -1479,9 +1638,26 @@ async def list_tools() -> list[types.Tool]:
                     "height": {
                         "type": "number",
                         "description": "Garage door height in inches"
+                    },
+                    "geometry": {
+                        "type": "string",
+                        "enum": ["Rectangle", "Arch", "Dutch"],
+                        "description": "Garage door opening geometry/shape. Rectangle (rectangular), Arch (arched top), or Dutch (divided). Default: Rectangle"
+                    },
+                    "install_door": {
+                        "type": "boolean",
+                        "description": "Install the garage door unit in the opening (true) or create rough opening only (false). Default: true"
+                    },
+                    "exterior_trim": {
+                        "type": "boolean",
+                        "description": "Install exterior trim around the garage door opening. Default: true"
+                    },
+                    "interior_casing": {
+                        "type": "boolean",
+                        "description": "Install interior casing around the garage door opening. Default: true"
                     }
                 },
-                "required": ["wall_group_name", "garage_type", "position", "width", "height"]
+                "required": ["group_name", "location", "width", "height"]
             },
         ),
 
@@ -1491,16 +1667,16 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "wall_group_name": {
+                    "garage_name": {
                         "type": "string",
-                        "description": "Wall group name"
+                        "description": "Garage door name (e.g., 'GARAGE1', 'GARAGE2')"
                     },
-                    "garage_index": {
-                        "type": "number",
-                        "description": "Garage door index (0-based)"
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name (optional - uses selection if not provided)"
                     }
                 },
-                "required": ["wall_group_name", "garage_index"]
+                "required": ["garage_name"]
             },
         ),
 
@@ -1558,6 +1734,426 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
 
+        types.Tool(
+            name="get_wall_info",
+            description=(
+                "Get wall information from an existing Medeek Wall assembly. "
+                "Returns authoritative values from Medeek attributes (not bounding box geometry). "
+                "**CRITICAL: USE THIS TOOL to query the exact top_plate_z value before placing trusses on walls.** "
+                "This tool reads directly from the Medeek Wall Plugin's stored attributes to provide accurate positioning data.\n\n"
+                "**Typical workflow:**\n"
+                "1. User asks to add trusses to existing walls\n"
+                "2. Call get_wall_info with wall group name (optional - will find any wall if omitted)\n"
+                "3. Use the returned `top_plate_z` value as the origin Z for truss placement\n"
+                "4. Use `wall_length` and `wall_start`/`wall_end` for truss geometry\n\n"
+                "**Returned information:**\n"
+                "- top_plate_z: Exact Z position of the top of the top plate (use this for truss placement)\n"
+                "- base_z: Z position of the wall base\n"
+                "- wall_height: Wall height in inches\n"
+                "- wall_length: Wall length in inches\n"
+                "- wall_start: Start point [x, y, z]\n"
+                "- wall_end: End point [x, y, z]\n"
+                "- stud_width, stud_spacing, plate_width: Framing details"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Wall group name (optional - if not provided, will find any wall assembly in the model)"
+                    }
+                },
+                "required": []
+            },
+        ),
+
+        types.Tool(
+            name="read_truss_attributes",
+            description="Read all attributes from a Medeek Truss assembly.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Truss group name (optional - will find any truss if not provided)"
+                    }
+                },
+                "required": []
+            },
+        ),
+
+        types.Tool(
+            name="read_truss_attribute",
+            description="Read a single attribute from a Medeek Truss assembly.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attribute_name": {
+                        "type": "string",
+                        "description": "Truss attribute name to read"
+                    },
+                    "group_name": {
+                        "type": "string",
+                        "description": "Truss group name (optional - will find any truss if not provided)"
+                    }
+                },
+                "required": ["attribute_name"]
+            },
+        ),
+
+        types.Tool(
+            name="modify_truss_attribute",
+            description=(
+                "Modify a SINGLE Medeek Truss attribute. **IMPORTANT: When changing multiple related attributes (e.g., enabling advanced roof options AND sheathing), use modify_truss instead to avoid regeneration issues.**\n\n"
+                "**KNOWN LIMITATION:** The Medeek API may require the edit UI to be opened manually once before modifications work. If this fails, inform the user to open the Medeek edit dialog once, then retry.\n\n"
+                "This tool modifies one attribute at a time. Each call with regenerate=true causes the truss to rebuild, which can reset other options. "
+                "For enabling roof features like sheathing, use the batch modify_truss tool instead.\n\n"
+                "**CRITICAL - Value Format Rules:**\n"
+                "- Dimensions/numbers: Pass as numeric values (e.g., 24.0, 5.5, 3.5)\n"
+                "- Options/toggles: MUST pass as literal strings 'YES' or 'NO' (NOT true/false, NOT boolean, NOT 1/0)\n"
+                "- Sheathing thickness: Pass as fraction string (e.g., '15/32', '1/2') - will be auto-converted to decimal\n"
+                "- Examples: SHEATHING_OPTION='YES', FASCIA_OPTION='NO', RAISEDHEEL='YES'\n\n"
+                "**Common Truss Attributes (from medeek_truss_param dictionary):**\n"
+                "Dimensions (numeric values):\n"
+                "- OVERHANGL: Left overhang in inches (e.g., 12.0, 18.0, 24.0)\n"
+                "- OVERHANGR: Right overhang in inches (e.g., 12.0, 18.0, 24.0)\n"
+                "- TCD: Top chord depth in inches (3.5=2x4, 5.5=2x6, 7.25=2x8)\n"
+                "- BCD: Bottom chord depth in inches (3.5=2x4, 5.5=2x6, 7.25=2x8)\n"
+                "- WEBD: Web depth in inches (3.5=2x4, 5.5=2x6)\n"
+                "- PLY: Number of plies (1, 2, or 3)\n"
+                "- PITCH: Roof pitch (e.g., 6.0 for 6:12, 8.0 for 8:12)\n"
+                "- SPAN: Truss span in inches\n"
+                "- USRHH: Raised heel height in inches (when RAISEDHEEL='YES')\n"
+                "- TRUSS_SPACING: Truss spacing in inches on-center (e.g., 16.0, 24.0)\n\n"
+                "Options (string 'YES' or 'NO'):\n"
+                "- RAISEDHEEL: Raised heel option (value='YES' or value='NO')\n"
+                "- SHEATHING_OPTION: Enable/disable sheathing (value='YES' or value='NO')\n"
+                "- FASCIA_OPTION: Enable/disable fascia (value='YES' or value='NO')\n"
+                "- RAKEBOARD_OPTION: Enable/disable rake boards (value='YES' or value='NO')\n"
+                "- ROOFCLADDING_OPTION: Enable/disable roof cladding (value='YES' or value='NO')\n"
+                "- GABLEWALL_OPTION: Enable/disable gable walls (value='YES' or value='NO')\n\n"
+                "**Usage Examples:**\n"
+                "- Change overhang: attribute_name='OVERHANGL', value=24.0\n"
+                "- Enable sheathing: attribute_name='SHEATHING_OPTION', value='YES'\n"
+                "- Disable fascia: attribute_name='FASCIA_OPTION', value='NO'\n"
+                "- Change lumber: attribute_name='TCD', value=5.5"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Truss group name to modify (optional - will find any truss if not provided)"
+                    },
+                    "attribute_name": {
+                        "type": "string",
+                        "description": "Medeek truss attribute name - see tool description for available attributes"
+                    },
+                    "value": {
+                        "description": "Attribute value - EXACT format required: numeric for dimensions (e.g., 24.0), string 'YES' or 'NO' for options (NOT true/false)"
+                    },
+                    "regenerate": {
+                        "type": "boolean",
+                        "description": "Regenerate the truss geometry after modifying. Default: true. Set false for batch changes."
+                    }
+                },
+                "required": ["attribute_name", "value"]
+            },
+        ),
+
+        types.Tool(
+            name="modify_truss",
+            description=(
+                "Modify multiple Medeek Truss attributes at once (batch modification). **USE THIS TOOL when enabling roof features like sheathing, fascia, or cladding.**\n\n"
+                "**KNOWN LIMITATION - Medeek API:**\n"
+                "The Medeek Truss Plugin API may require the edit UI to be opened manually once before attribute modifications work properly. "
+                "If modifications don't appear, inform the user they may need to: (1) Right-click the truss assembly, (2) Select 'Edit Truss Assembly', (3) Close the dialog, (4) Then retry the modification.\n\n"
+                "**CRITICAL - Why use this tool:**\n"
+                "When you modify truss attributes one at a time with regenerate=true, the Medeek plugin resets options like ADVROOFOPTIONS and SHEATHING_OPTION back to defaults. "
+                "This tool sets ALL attributes with regen=false, then regenerates ONCE at the end with all changes applied together.\n\n"
+                "**AUTOMATIC BEHAVIOR - NO NEED TO SET adv_roof_options:**\n"
+                "If you pass ANY advanced feature (sheathing, fascia, cladding, gutters, etc.), the tool AUTOMATICALLY enables adv_roof_options='YES' for you. "
+                "You do NOT need to explicitly pass adv_roof_options='YES' - just pass the features you want.\n\n"
+                "**Common use cases:**\n"
+                "- Add roof sheathing: Pass sheathing_option='YES' + sheathing_thickness='15/32' (adv_roof_options auto-enabled)\n"
+                "- Add fascia boards: Pass fascia_option='YES' + fascia_width=7.25 (adv_roof_options auto-enabled)\n"
+                "- Enable multiple roof features: Pass multiple parameters in one call\n\n"
+                "**Value Format Rules:**\n"
+                "- Dimensions/numbers: Pass as numeric values (e.g., 24.0, 5.5, 3.5)\n"
+                "- Options/toggles: MUST pass as literal strings 'YES' or 'NO' (NOT true/false)\n\n"
+                "**Example workflow to add sheathing:**\n"
+                "modify_truss(group_name='COMMON_TRUSS_ASSEMBLY_1', sheathing_option='YES', sheathing_thickness='15/32')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_name": {
+                        "type": "string",
+                        "description": "Truss group name to modify (required)"
+                    },
+                    "adv_roof_options": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable advanced roof options. NOTE: This is AUTOMATICALLY set to 'YES' if you pass any advanced feature (sheathing, fascia, etc.). You do NOT need to explicitly pass this parameter."
+                    },
+                    "overhang_left": {
+                        "type": "number",
+                        "description": "Left-side eave overhang in inches"
+                    },
+                    "overhang_right": {
+                        "description": "Right-side eave overhang. Use 'SAME AS LEFT' or specify inches as number."
+                    },
+                    "top_chord_depth": {
+                        "type": "number",
+                        "description": "Top chord member depth in inches (3.5=2x4, 5.5=2x6, 7.25=2x8)"
+                    },
+                    "bottom_chord_depth": {
+                        "type": "number",
+                        "description": "Bottom chord member depth in inches"
+                    },
+                    "web_depth": {
+                        "type": "number",
+                        "description": "Web member depth in inches"
+                    },
+                    "ply": {
+                        "type": "number",
+                        "description": "Truss ply count (number of plies)"
+                    },
+                    "raised_heel": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable raised heel configuration"
+                    },
+                    "raised_heel_height": {
+                        "type": "number",
+                        "description": "Custom raised heel height in inches"
+                    },
+                    "truss_spacing": {
+                        "type": "number",
+                        "description": "Truss spacing in inches on-center"
+                    },
+                    "gable_truss_input": {
+                        "type": "string",
+                        "enum": ["YES", "NO", "FRONT"],
+                        "description": "Gable truss configuration"
+                    },
+                    "vert_spacing": {
+                        "type": "number",
+                        "description": "Vertical spacing for web layout in inches"
+                    },
+                    "sheathing_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable roof sheathing (requires adv_roof_options='YES')"
+                    },
+                    "sheathing_thickness": {
+                        "type": "string",
+                        "enum": ["7/16", "15/32", "1/2", "19/32", "5/8", "23/32", "3/4"],
+                        "description": "Roof sheathing thickness as fraction (e.g., '15/32', '1/2'). Automatically converted to decimal."
+                    },
+                    "gable_wall_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable gable wall framing"
+                    },
+                    "fascia_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable fascia boards (requires adv_roof_options='YES')"
+                    },
+                    "fascia_type": {
+                        "type": "string",
+                        "enum": ["DROP", "FLUSH", "BEVEL"],
+                        "description": "Fascia type/configuration"
+                    },
+                    "fascia_width": {
+                        "type": "number",
+                        "description": "Fascia width in inches"
+                    },
+                    "fascia_depth": {
+                        "type": "number",
+                        "description": "Fascia depth in inches"
+                    },
+                    "rakeboard_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable rake boards"
+                    },
+                    "overhang_gable": {
+                        "type": "number",
+                        "description": "Gable-end overhang dimension in inches"
+                    },
+                    "rake_width": {
+                        "type": "number",
+                        "description": "Rake board width in inches"
+                    },
+                    "rake_depth": {
+                        "type": "number",
+                        "description": "Rake board depth in inches"
+                    },
+                    "outlooker_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable outlooker framing"
+                    },
+                    "outlooker_spacing": {
+                        "type": "number",
+                        "description": "Outlooker spacing in inches"
+                    },
+                    "outlooker_size": {
+                        "type": "string",
+                        "enum": ["2x4", "2x6"],
+                        "description": "Outlooker member size"
+                    },
+                    "outlooker_orient": {
+                        "type": "string",
+                        "enum": ["HORIZONTAL", "VERTICAL"],
+                        "description": "Outlooker orientation"
+                    },
+                    "outlooker_peak": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Extend outlooker to peak"
+                    },
+                    "heelblock_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable heel blocks"
+                    },
+                    "heelblock_orient": {
+                        "type": "string",
+                        "enum": ["ANGLED", "VERTICAL"],
+                        "description": "Heel block orientation"
+                    },
+                    "roofcladding_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable roof cladding"
+                    },
+                    "roofclad_ext": {
+                        "type": "number",
+                        "description": "Roof cladding extension in inches"
+                    },
+                    "ridgecap_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable ridge cap"
+                    },
+                    "wallcladding_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable wall cladding for gable walls"
+                    },
+                    "soffit_cut": {
+                        "type": "string",
+                        "enum": ["NO", "FLUSH", "0.25", "0.375", "0.5", "0.625", "0.75", "1.0", "1.5"],
+                        "description": "Soffit cut style"
+                    },
+                    "roof_return": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable roof return"
+                    },
+                    "return_type": {
+                        "type": "string",
+                        "enum": ["Hip", "Gable", "Full"],
+                        "description": "Roof return type/configuration"
+                    },
+                    "pitch3": {
+                        "type": "string",
+                        "description": "Roof return pitch value"
+                    },
+                    "return_ext": {
+                        "type": "number",
+                        "description": "Roof return extension in inches"
+                    },
+                    "return_length": {
+                        "type": "number",
+                        "description": "Roof return length in inches"
+                    },
+                    "roof_batten": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable roof battens"
+                    },
+                    "gypsum_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable gypsum ceiling"
+                    },
+                    "gutter_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable gutters"
+                    },
+                    "gutter_type": {
+                        "type": "string",
+                        "description": "Gutter type/profile"
+                    },
+                    "gutter_voffset": {
+                        "type": "number",
+                        "description": "Vertical offset for gutter placement in inches"
+                    },
+                    "gutter_ext": {
+                        "type": "number",
+                        "description": "Gutter extension in inches"
+                    },
+                    "downspout_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable downspout geometry"
+                    },
+                    "dsp_length": {
+                        "type": "number",
+                        "description": "Downspout length in inches"
+                    },
+                    "dsp_type": {
+                        "type": "string",
+                        "enum": ["RECTANGLE", "ROUND"],
+                        "description": "Downspout type/profile"
+                    },
+                    "gutter_wrap_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable gutter wrap"
+                    },
+                    "insul_option": {
+                        "type": "string",
+                        "enum": ["YES", "NO"],
+                        "description": "Enable insulation"
+                    },
+                    "wallsheath_mat": {
+                        "type": "string",
+                        "description": "Wall sheathing material"
+                    },
+                    "wallclad_mat": {
+                        "type": "string",
+                        "description": "Wall cladding material"
+                    },
+                    "roofsheath_mat": {
+                        "type": "string",
+                        "description": "Roof sheathing material"
+                    },
+                    "roofclad_mat": {
+                        "type": "string",
+                        "description": "Roof cladding material"
+                    },
+                    "wallsheath_thk": {
+                        "description": "Wall sheathing thickness. Can be fraction string (e.g., '15/32', '1/2') or decimal number. Automatically converted to decimal."
+                    },
+                    "wallclad_thk": {
+                        "type": "number",
+                        "description": "Wall cladding thickness in inches"
+                    },
+                    "roofclad_thk": {
+                        "type": "number",
+                        "description": "Roof cladding thickness in inches"
+                    }
+                },
+                "required": ["group_name"]
+            },
+        ),
+
         # ── Execute Ruby ───────────────────────────────────────────────────
 
         types.Tool(
@@ -1568,8 +2164,12 @@ async def list_tools() -> list[types.Tool]:
                 "to the SketchUp Ruby API (Sketchup, Geom, UI, etc.). "
                 "Returns the result of the last expression and any puts/print output. "
                 "Use with care — this can modify or delete model data. "
-                "\n\n**IMPORTANT: Do NOT use this tool to create foundations, slabs, footers, or trusses.** "
-                "Use the specialized construction tools instead: create_foundation for slabs/footers, create_roof_truss for trusses."
+                "\n\n**IMPORTANT: ALWAYS prefer specialized MCP tools over execute_ruby when available:**\n"
+                "- Creating constructions: Use create_foundation, create_wall_perimeter, create_roof_truss (NOT execute_ruby)\n"
+                "- Modifying constructions: Use modify_truss_attribute, modify_wall_attribute, modify_foundation (NOT execute_ruby)\n"
+                "- Reading construction data: Use read_truss_attributes, read_wall_attributes, get_wall_info, get_foundation_info (NOT execute_ruby)\n"
+                "- Adding features: Use add_window, add_door, add_garage_door (NOT execute_ruby)\n\n"
+                "Only use execute_ruby for tasks that don't have a specialized tool (e.g., querying general model state, debugging, custom geometry)."
             ),
             inputSchema={
                 "type": "object",
@@ -1672,6 +2272,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         elif name == "read_foundation_attribute":
             return ok(await su_post("/construction/foundation/read_attribute", arguments))
 
+        elif name == "get_foundation_info":
+            return ok(await su_post("/construction/foundation/info", arguments))
+
         elif name == "modify_foundation":
             return ok(await su_post("/construction/foundation/modify", arguments))
 
@@ -1689,6 +2292,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         elif name == "modify_wall_attribute":
             return ok(await su_post("/construction/wall/modify", arguments))
+
+        elif name == "get_wall_info":
+            return ok(await su_post("/construction/wall/info", arguments))
 
         elif name == "add_window":
             return ok(await su_post("/construction/wall/window", arguments))
@@ -1713,6 +2319,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         elif name == "read_column_attributes":
             return ok(await su_post("/construction/wall/column/read_attributes", arguments))
+
+        elif name == "get_wall_info":
+            return ok(await su_post("/construction/wall/info", arguments))
+
+        elif name == "read_truss_attributes":
+            return ok(await su_post("/construction/truss/read_attributes", arguments))
+
+        elif name == "read_truss_attribute":
+            return ok(await su_post("/construction/truss/read_attribute", arguments))
+
+        elif name == "modify_truss_attribute":
+            return ok(await su_post("/construction/truss/modify", arguments))
+
+        elif name == "modify_truss":
+            return ok(await su_post("/construction/truss/modify_batch", arguments))
 
         # ── Execute Ruby ───────────────────────────────────────────────────
         elif name == "execute_ruby":

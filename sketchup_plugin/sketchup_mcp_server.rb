@@ -16,6 +16,7 @@ require 'sketchup'
 require 'uri'
 require 'cgi'
 require 'thread'
+require 'stringio'
 
 puts "====== REQUIRES COMPLETE ======"
 
@@ -492,7 +493,7 @@ module SU_MCP
 
     # Capture puts/print output
     old_stdout = $stdout
-    $stdout = StringIO.new
+    $stdout = ::StringIO.new
 
     begin
       result = eval(code, binding) # rubocop:disable Security/Eval
@@ -588,6 +589,23 @@ module SU_MCP
     end
   end
 
+  def self.handle_read_truss_attributes(params = {})
+    Construction::MedeekTruss.read_truss_attributes(params)
+  end
+
+  def self.handle_read_truss_attribute(params = {})
+    Construction::MedeekTruss.read_truss_attribute(params)
+  end
+
+  def self.handle_modify_truss_attribute(params = {})
+    Construction::MedeekTruss.modify_truss_attribute(params)
+  end
+
+  # Batch modify truss handler - modifies multiple attributes at once
+  def self.handle_modify_truss(params = {})
+    Construction::MedeekTruss.modify_truss(params)
+  end
+
   # Wall handler - delegates to Construction::Wall module
   def self.handle_create_wall(params = {})
     Construction::Wall.create(params)
@@ -678,13 +696,69 @@ module SU_MCP
     end
   end
 
+  def self.handle_get_foundation_info(params = {})
+    begin
+      result = Construction::MedeekFoundation.get_info(params)
+      return result
+    rescue => e
+      error_msg = "Failed to get foundation info: #{e.message}"
+      log "[SU_MCP] #{error_msg}"
+      return {
+        status: 'failed',
+        message: error_msg
+      }
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Wall handlers (Medeek Wall Plugin)
   # ---------------------------------------------------------------------------
 
+  # Helper: Automatically detect foundation and adjust wall Z coordinates
+  def self.auto_adjust_wall_z_for_foundation(params)
+    begin
+      # Try to get foundation info
+      foundation_info = Construction::MedeekFoundation.get_info({})
+
+      if foundation_info && foundation_info[:status] == 'success'
+        slab_top_z = foundation_info[:slab_top_z]
+        log "[SU_MCP] Auto-detected foundation: slab_top_z = #{slab_top_z}\""
+
+        # Adjust start_point and end_point Z coordinates if present
+        if params['start_point'] && params['start_point'].is_a?(Array) && params['start_point'].length == 3
+          params['start_point'][2] = slab_top_z
+          log "[SU_MCP] Adjusted start_point Z to #{slab_top_z}\""
+        end
+
+        if params['end_point'] && params['end_point'].is_a?(Array) && params['end_point'].length == 3
+          params['end_point'][2] = slab_top_z
+          log "[SU_MCP] Adjusted end_point Z to #{slab_top_z}\""
+        end
+
+        # Adjust outline_points Z coordinates if present
+        if params['outline_points'] && params['outline_points'].is_a?(Array)
+          params['outline_points'].each do |pt|
+            if pt.is_a?(Array) && pt.length == 3
+              pt[2] = slab_top_z
+            end
+          end
+          log "[SU_MCP] Adjusted #{params['outline_points'].length} outline points Z to #{slab_top_z}\""
+        end
+      end
+    rescue => e
+      # Foundation not found or error - just continue with original params
+      log "[SU_MCP] No foundation auto-detected: #{e.message}"
+    end
+
+    params
+  end
+
   def self.handle_create_medeek_wall(params = {})
     if Construction::MedeekWall.available?
       begin
+        # Auto-detect foundation and adjust Z coordinates if needed
+        params = auto_adjust_wall_z_for_foundation(params)
+
         result = Construction::MedeekWall.create_wall(params)
         if result && result[:status] == 'created'
           return result
@@ -711,6 +785,9 @@ module SU_MCP
   def self.handle_create_wall_perimeter(params = {})
     if Construction::MedeekWall.available?
       begin
+        # Auto-detect foundation and adjust Z coordinates if needed
+        params = auto_adjust_wall_z_for_foundation(params)
+
         result = Construction::MedeekWall.create_wall_perimeter(params)
         if result && result[:status] == 'created'
           return result
@@ -888,6 +965,10 @@ module SU_MCP
     Construction::MedeekWall.read_column_attributes(params)
   end
 
+  def self.handle_get_wall_info(params = {})
+    Construction::MedeekWall.get_wall_info(params)
+  end
+
   # ---------------------------------------------------------------------------
   # HTTP Server (using TCPServer instead of WEBrick for Ruby 3.2+)
   # ---------------------------------------------------------------------------
@@ -919,11 +1000,16 @@ module SU_MCP
     ['POST', '/components/place']  => :handle_place_component,
     # POST - Construction
     ['POST', '/construction/roof_truss']  => :handle_create_roof_truss,
+    ['POST', '/construction/truss/read_attributes'] => :handle_read_truss_attributes,
+    ['POST', '/construction/truss/read_attribute']  => :handle_read_truss_attribute,
+    ['POST', '/construction/truss/modify']          => :handle_modify_truss_attribute,
+    ['POST', '/construction/truss/modify_batch']    => :handle_modify_truss,
     ['POST', '/construction/wall']        => :handle_create_wall,
     ['POST', '/construction/foundation']  => :handle_create_foundation,
     ['POST', '/construction/foundation/read_attributes'] => :handle_read_foundation_attributes,
     ['POST', '/construction/foundation/read_attribute']  => :handle_read_foundation_attribute,
     ['POST', '/construction/foundation/modify']          => :handle_modify_foundation,
+    ['POST', '/construction/foundation/info']            => :handle_get_foundation_info,
     ['POST', '/construction/wall/create']                => :handle_create_medeek_wall,
     ['POST', '/construction/wall/perimeter']             => :handle_create_wall_perimeter,
     ['POST', '/construction/wall/read_attributes']       => :handle_read_wall_attributes,
@@ -937,6 +1023,7 @@ module SU_MCP
     ['POST', '/construction/wall/garage/read_attributes'] => :handle_read_garage_attributes,
     ['POST', '/construction/wall/column']                => :handle_add_column,
     ['POST', '/construction/wall/column/read_attributes'] => :handle_read_column_attributes,
+    ['POST', '/construction/wall/info']                  => :handle_get_wall_info,
     # POST - Ruby
     ['POST', '/ruby/execute']      => :handle_execute_ruby,
   }

@@ -270,6 +270,16 @@ module Construction
             medeek.sog_set_attribute('DRAINOPTION', 'YES', foundation_group, true)
           end
 
+          # The input Z coordinate IS the top-of-slab position
+          # This is where wall framing starts, NOT the top of anchor bolts
+          origin_z = pts[0][2].to_f  # Z coordinate from first input point
+          slab_top_z = origin_z  # Input Z IS the slab top - no calculation needed
+
+          SU_MCP.log "[SU_MCP] Foundation origin Z: #{origin_z}\", slab thickness: #{slab_thickness}\", top of slab Z: #{slab_top_z}\""
+
+          # Tag slab entities for organization
+          slab_entities_tagged = tag_slab_entities(foundation_group, slab_thickness, origin_z)
+
           SU_MCP.model.commit_operation
 
           {
@@ -282,7 +292,8 @@ module Construction
             footing_width: footing_width,
             garage_curb: garage_curb,
             perimeter_length_ft: calculate_perimeter(pts) / 12.0,
-            message: "Created slab-on-grade foundation '#{foundation_group.name}' using Medeek Foundation Plugin (depth: #{foundation_depth}\", slab: #{slab_thickness}\", footing: #{footing_width}\")"
+            slab_top_z: slab_top_z,
+            message: "Created slab-on-grade foundation '#{foundation_group.name}' using Medeek Foundation Plugin (depth: #{foundation_depth}\", slab: #{slab_thickness}\", footing: #{footing_width}\", top at Z=#{slab_top_z.round(2)}\")"
           }
         else
           {
@@ -515,7 +526,106 @@ module Construction
       end
     end
 
+    # Get foundation information including critical slab_top_z value
+    # The input Z coordinate IS the slab top - no calculation needed
+    def self.get_info(params = {})
+      group_name = params['group_name']
+
+      # Find foundation group
+      if group_name
+        foundation_group = SU_MCP.model.entities.grep(Sketchup::Group).find do |g|
+          g.name == group_name
+        end
+        raise "Foundation '#{group_name}' not found" unless foundation_group
+      else
+        # Find any foundation group
+        foundation_group = SU_MCP.model.entities.grep(Sketchup::Group).find do |g|
+          g.name =~ /FOUNDATION_SOG_POLYGON_ASSEMBLY/
+        end
+        raise "No foundation found in model. Please specify group_name or create a foundation first." unless foundation_group
+      end
+
+      # Read Medeek attributes
+      attrs = foundation_group.attribute_dictionaries
+      unless attrs && attrs["medeek_foundation_param"]
+        raise "Foundation group does not have Medeek Foundation attributes"
+      end
+
+      param_dict = attrs["medeek_foundation_param"]
+
+      # The input Z coordinate IS the slab top
+      pt0 = param_dict["PT0"]
+      slab_top_z = pt0.z.to_f
+
+      # Get outline points
+      point_count = param_dict["POINTCOUNT"].to_i
+      outline_points = []
+      (0...point_count).each do |i|
+        pt = param_dict["PT#{i}"]
+        outline_points << [pt.x.to_f, pt.y.to_f, pt.z.to_f] if pt
+      end
+
+      # Get other info
+      slab_thickness = param_dict["SLABTHICKNESS"]
+      foundation_depth = param_dict["FDEPTH"]
+      footing_width = param_dict["FTGWIDTH"]
+
+      rebar_dict = attrs["medeek_foundation_rebar"]
+      rebar_enabled = rebar_dict && rebar_dict["REBAROPTION"] == "YES"
+
+      anchor_bolts_enabled = param_dict["ABOLTOPTION"] == "YES"
+
+      {
+        status: 'success',
+        group_name: foundation_group.name,
+        foundation_type: 'slab-on-grade',
+        slab_top_z: slab_top_z,
+        slab_thickness: slab_thickness,
+        foundation_depth: foundation_depth,
+        footing_width: footing_width,
+        outline_points: outline_points,
+        rebar_enabled: rebar_enabled,
+        anchor_bolts_enabled: anchor_bolts_enabled,
+        message: "Foundation '#{foundation_group.name}': slab top at Z=#{slab_top_z.round(2)}\", use this Z value for wall placement"
+      }
+    end
+
     private
+
+    # Tag slab entities with "Slab" layer for organization
+    # Medeek Foundation Plugin organizes components in named groups
+    def self.tag_slab_entities(foundation_group, slab_thickness, origin_z)
+      # Create or get the tags/layers
+      slab_tag = SU_MCP.model.layers.add("Slab")
+      rebar_tag = SU_MCP.model.layers.add("foundation rebar")
+
+      slab_count = 0
+      rebar_count = 0
+
+      # Iterate through all nested groups in the foundation
+      foundation_group.entities.grep(Sketchup::Group).each do |group|
+        name = group.name
+
+        # Tag the SLAB_ON_GRADE group (concrete slab geometry)
+        if name == "SLAB_ON_GRADE"
+          group.layer = slab_tag
+          slab_count += 1
+
+        # Tag rebar components:
+        # - REBAR * (top/bottom footing bars)
+        # - TRANS * (transition/dowel bars)
+        # - LONG * (longitudinal slab reinforcement)
+        elsif name =~ /^REBAR\s|^TRANS\s|^LONG\s/
+          group.layer = rebar_tag
+          rebar_count += 1
+        end
+      end
+
+      SU_MCP.log "[SU_MCP] Tagged #{slab_count} slab group(s) with 'Slab' layer"
+      SU_MCP.log "[SU_MCP] Tagged #{rebar_count} rebar group(s) with 'foundation rebar' layer"
+
+      slab_count + rebar_count
+    end
 
     # Calculate perimeter length from points array
     def self.calculate_perimeter(pts)

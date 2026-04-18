@@ -694,5 +694,91 @@ module Construction
       end
     end
 
+    # Get wall information including top plate Z position
+    # This provides authoritative values from Medeek attributes rather than bounding box geometry
+    def self.get_wall_info(params = {})
+      group_name = params['group_name']
+
+      medeek = get_medeek_module
+      raise "Medeek Wall Plugin not available. Please install and license the plugin." unless medeek
+
+      # Find wall group
+      if group_name
+        wall_group = SU_MCP.model.active_entities.grep(Sketchup::Group).find { |g| g.name == group_name }
+        raise "Wall group '#{group_name}' not found" unless wall_group
+      else
+        # If no group name, try to find any wall group
+        wall_group = SU_MCP.model.active_entities.grep(Sketchup::Group).find { |g| g.name =~ /WALL/ }
+        raise "No wall group found in model" unless wall_group
+        group_name = wall_group.name
+      end
+
+      # Read attributes directly from attribute dictionaries (not using Medeek API)
+      # The Medeek wall_read_attributes returns configuration flags, not geometry
+      param_dict = wall_group.attribute_dictionary('medeek_wall_param')
+      raise "medeek_wall_param dictionary not found" unless param_dict
+
+      # Extract geometry from medeek_wall_param dictionary
+      wall_height = param_dict['WALLHGT']      # Wall height in inches (to TOP of top plate)
+      wall_length = param_dict['WALL_LENGTH']  # Wall length in inches
+      wall_type = param_dict['WALLTYPE']
+      wall_family = param_dict['WALLFAMILY']
+      stud_width = param_dict['STUD_WIDTH']
+      stud_spacing = param_dict['STUDSPACING']
+
+      # Get the origin (stored as array of strings like ["0\"", "-11/16\"", "0\""])
+      init_origin = param_dict['INITORIGIN']
+
+      # Parse origin to get base Z
+      if init_origin && init_origin.is_a?(Array) && init_origin.length >= 3
+        # Parse the Z coordinate string (e.g., "0\"" -> 0.0)
+        base_z_str = init_origin[2].to_s.gsub('"', '').strip
+        base_z = eval(base_z_str).to_f  # Handle fractions like "1/16"
+      else
+        base_z = 0.0
+      end
+
+      raise "WALLHGT not found in wall attributes" unless wall_height
+      wall_height_float = wall_height.to_f
+
+      # CRITICAL: WALLHGT is the height to the TOP of the top plate
+      # This is EXACTLY where trusses should sit - no adjustment needed
+      # DO NOT use bounding box which includes sheathing/cladding extending above the plate
+      top_plate_z = base_z + wall_height_float
+
+      # Get wall start/end points from the wall's corner geometry
+      # These are stored in a different way, so we'll calculate from the group's transformation
+      wall_start_pt = wall_group.transformation.origin
+      wall_start = [wall_start_pt.x, wall_start_pt.y, base_z]
+
+      # We don't have wall_end easily accessible, so we'll use length and assume straight wall
+      # For now, set wall_end to nil and let caller use wall_length
+      wall_end = nil
+
+      SU_MCP.log "[SU_MCP] Wall info: base_z=#{base_z}\", WALLHGT=#{wall_height_float}\", top_plate_z=#{top_plate_z}\""
+
+      {
+        status: 'success',
+        group_name: group_name,
+        top_plate_z: top_plate_z,
+        base_z: base_z,
+        wall_height: wall_height_float,
+        wall_length: wall_length&.to_f,
+        wall_type: wall_type,
+        wall_family: wall_family,
+        stud_width: stud_width,
+        stud_spacing: stud_spacing&.to_f,
+        wall_start: wall_start,
+        wall_end: wall_end
+      }
+
+    rescue => e
+      if e.message.include?("license") || e.message.include?("License")
+        raise "Medeek Wall Plugin license required. Please activate your license in SketchUp."
+      else
+        raise "Medeek Wall Plugin error: #{e.message}"
+      end
+    end
+
   end
 end
