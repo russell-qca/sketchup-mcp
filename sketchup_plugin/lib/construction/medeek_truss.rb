@@ -259,7 +259,7 @@ module Construction
       end
 
       # Convert fraction strings to decimals for thickness attributes
-      if attribute_name == 'SHEATHING_THICKNESS' || attribute_name == 'WALLSHEATH_THK'
+      if attribute_name == 'SHEATHING_THICKNESS' || attribute_name == 'WALLSHEATHTHK'
         value = convert_fraction_to_decimal(value)
       end
 
@@ -470,7 +470,7 @@ module Construction
       if params['wallsheath_thk']
         # Convert fraction string to decimal if needed
         wallsheath_decimal = convert_fraction_to_decimal(params['wallsheath_thk'])
-        attributes_to_set << ['WALLSHEATH_THK', wallsheath_decimal]
+        attributes_to_set << ['WALLSHEATHTHK', wallsheath_decimal]
       end
       attributes_to_set << ['WALLCLAD_THK', params['wallclad_thk'].to_f] if params['wallclad_thk']
       attributes_to_set << ['ROOFCLAD_THK', params['roofclad_thk'].to_f] if params['roofclad_thk']
