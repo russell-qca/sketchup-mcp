@@ -82,6 +82,9 @@ cp "$SCRIPT_DIR/lib/construction/medeek_foundation_reader.rb" "$PLUGINS_DIR/lib/
 echo "  - Copying lib/construction/medeek_wall.rb"
 cp "$SCRIPT_DIR/lib/construction/medeek_wall.rb" "$PLUGINS_DIR/lib/construction/"
 
+echo "  - Copying lib/construction/deck.rb"
+cp "$SCRIPT_DIR/lib/construction/deck.rb" "$PLUGINS_DIR/lib/construction/"
+
 # Remove backup file if it exists in target
 if [ -f "$PLUGINS_DIR/sketchup_mcp_server.rb.bak" ]; then
     echo "  - Removing old backup file"

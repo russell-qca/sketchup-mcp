@@ -1,0 +1,293 @@
+{
+  "code_name": "2019 Ohio Residential Code",
+  "base_code": "IRC 2018",
+  "jurisdiction": "Ohio",
+  "effective_date": "2019-01-01",
+  "description": "Ohio Residential Code for deck construction, based on IRC 2018",
+
+  "loads": {
+    "dead_load_psf": 10,
+    "live_load_psf": 40,
+    "total_load_psf": 50,
+    "snow_load_psf": 25,
+    "notes": "Dead load includes deck framing and decking. Live load per IRC Table R301.5"
+  },
+
+  "frost_depth": {
+    "depth_inches": 32,
+    "notes": "Ohio frost depth per IRC Figure R301.2(1). May vary by county."
+  },
+
+  "footings": {
+    "min_diameter_inches": 12,
+    "min_depth_inches": 32,
+    "soil_bearing_capacity_psf": 1500,
+    "concrete_strength_psi": 2500,
+    "notes": "Footings must extend below frost line. Soil bearing capacity assumes typical soil - verify with soils report."
+  },
+
+  "posts": {
+    "max_height_feet": 8,
+    "sizes": {
+      "4x4": {
+        "max_load_lbs": 4000,
+        "max_beam_span_ft": 6
+      },
+      "4x6": {
+        "max_load_lbs": 6000,
+        "max_beam_span_ft": 8
+      },
+      "6x6": {
+        "max_load_lbs": 8000,
+        "max_beam_span_ft": 12
+      }
+    },
+    "notes": "Post sizes based on tributary area and load. For ground-level decks (<30in), 4x4 typically sufficient."
+  },
+
+  "joist_spans": {
+    "notes": "Maximum joist spans in feet-inches. Based on IRC Table R507.5 for 40 psf live load + 10 psf dead load.",
+    "species": {
+      "Southern_Pine": {
+        "grade": "No. 2",
+        "2x6": {
+          "12": "11-7",
+          "16": "10-5",
+          "24": "8-6"
+        },
+        "2x8": {
+          "12": "15-0",
+          "16": "13-6",
+          "24": "11-0"
+        },
+        "2x10": {
+          "12": "19-6",
+          "16": "17-6",
+          "24": "14-3"
+        },
+        "2x12": {
+          "12": "23-9",
+          "16": "21-3",
+          "24": "17-4"
+        }
+      },
+      "Douglas_Fir_Larch": {
+        "grade": "No. 2",
+        "2x6": {
+          "12": "10-9",
+          "16": "9-9",
+          "24": "7-11"
+        },
+        "2x8": {
+          "12": "14-2",
+          "16": "12-10",
+          "24": "10-6"
+        },
+        "2x10": {
+          "12": "18-0",
+          "16": "16-5",
+          "24": "13-5"
+        },
+        "2x12": {
+          "12": "22-0",
+          "16": "20-0",
+          "24": "16-4"
+        }
+      },
+      "Hem_Fir": {
+        "grade": "No. 2",
+        "2x6": {
+          "12": "10-6",
+          "16": "9-6",
+          "24": "7-9"
+        },
+        "2x8": {
+          "12": "13-10",
+          "16": "12-7",
+          "24": "10-3"
+        },
+        "2x10": {
+          "12": "17-8",
+          "16": "16-0",
+          "24": "13-1"
+        },
+        "2x12": {
+          "12": "21-6",
+          "16": "19-6",
+          "24": "15-11"
+        }
+      },
+      "SPF": {
+        "grade": "No. 2",
+        "2x6": {
+          "12": "10-2",
+          "16": "9-3",
+          "24": "7-6"
+        },
+        "2x8": {
+          "12": "13-5",
+          "16": "12-2",
+          "24": "9-11"
+        },
+        "2x10": {
+          "12": "17-1",
+          "16": "15-6",
+          "24": "12-8"
+        },
+        "2x12": {
+          "12": "20-10",
+          "16": "18-11",
+          "24": "15-5"
+        }
+      }
+    }
+  },
+
+  "beam_spans": {
+    "notes": "Maximum beam spans in feet-inches for double 2x beams. Based on IRC Table R507.6. Assumes one floor with 40 psf deck live load.",
+    "species": {
+      "Southern_Pine": {
+        "grade": "No. 2",
+        "2x6": {
+          "6": "6-11",
+          "8": "6-0",
+          "10": "5-5",
+          "12": "4-11"
+        },
+        "2x8": {
+          "6": "9-0",
+          "8": "7-10",
+          "10": "7-1",
+          "12": "6-5"
+        },
+        "2x10": {
+          "6": "11-6",
+          "8": "10-0",
+          "10": "9-1",
+          "12": "8-3"
+        },
+        "2x12": {
+          "6": "14-0",
+          "8": "12-2",
+          "10": "11-0",
+          "12": "10-1"
+        }
+      },
+      "Douglas_Fir_Larch": {
+        "grade": "No. 2",
+        "2x6": {
+          "6": "6-5",
+          "8": "5-7",
+          "10": "5-1",
+          "12": "4-7"
+        },
+        "2x8": {
+          "6": "8-5",
+          "8": "7-4",
+          "10": "6-7",
+          "12": "6-0"
+        },
+        "2x10": {
+          "6": "10-9",
+          "8": "9-4",
+          "10": "8-6",
+          "12": "7-9"
+        },
+        "2x12": {
+          "6": "13-1",
+          "8": "11-4",
+          "10": "10-4",
+          "12": "9-5"
+        }
+      },
+      "Hem_Fir": {
+        "grade": "No. 2",
+        "2x6": {
+          "6": "6-3",
+          "8": "5-5",
+          "10": "4-11",
+          "12": "4-6"
+        },
+        "2x8": {
+          "6": "8-2",
+          "8": "7-1",
+          "10": "6-5",
+          "12": "5-10"
+        },
+        "2x10": {
+          "6": "10-5",
+          "8": "9-1",
+          "10": "8-2",
+          "12": "7-6"
+        },
+        "2x12": {
+          "6": "12-8",
+          "8": "11-0",
+          "10": "10-0",
+          "12": "9-1"
+        }
+      },
+      "SPF": {
+        "grade": "No. 2",
+        "2x6": {
+          "6": "6-1",
+          "8": "5-3",
+          "10": "4-9",
+          "12": "4-4"
+        },
+        "2x8": {
+          "6": "7-11",
+          "8": "6-11",
+          "10": "6-3",
+          "12": "5-8"
+        },
+        "2x10": {
+          "6": "10-1",
+          "8": "8-10",
+          "10": "7-11",
+          "12": "7-3"
+        },
+        "2x12": {
+          "6": "12-4",
+          "8": "10-8",
+          "10": "9-8",
+          "12": "8-10"
+        }
+      }
+    }
+  },
+
+  "decking": {
+    "5/4x6": {
+      "max_joist_spacing_inches": 16,
+      "perpendicular_to_joists": true
+    },
+    "2x6": {
+      "max_joist_spacing_inches": 24,
+      "perpendicular_to_joists": true,
+      "diagonal_45deg_max_spacing": 16
+    },
+    "notes": "Decking must be pressure-treated or naturally decay-resistant. Fasteners must be corrosion-resistant."
+  },
+
+  "fasteners": {
+    "joist_to_beam": {
+      "type": "joist hanger or (2) 10d nails toe-nailed each side",
+      "notes": "Joist hangers preferred for positive connection"
+    },
+    "beam_to_post": {
+      "type": "approved post cap or through-bolted",
+      "min_bolt_diameter": "1/2 inch"
+    },
+    "decking": {
+      "type": "10d nails or #8 screws, minimum",
+      "spacing": "2 fasteners per joist crossing"
+    }
+  },
+
+  "ground_level_deck": {
+    "max_height_inches": 30,
+    "railing_required": false,
+    "notes": "Decks not more than 30 inches above grade do not require guardrails per IRC R312.1. Steps require handrails if 4 or more risers."
+  }
+}

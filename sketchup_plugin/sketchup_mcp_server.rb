@@ -555,6 +555,11 @@ module SU_MCP
 
 
   # Main roof truss handler - uses Medeek if available, falls back to built-in
+  # Deck handler - creates complete deck assembly
+  def self.handle_create_deck(params = {})
+    Construction::Deck.create(params)
+  end
+
   def self.handle_create_roof_truss(params = {})
     if Construction::MedeekTruss.available?
       begin
@@ -999,6 +1004,7 @@ module SU_MCP
     ['POST', '/components/create'] => :handle_create_component,
     ['POST', '/components/place']  => :handle_place_component,
     # POST - Construction
+    ['POST', '/construction/deck']        => :handle_create_deck,
     ['POST', '/construction/roof_truss']  => :handle_create_roof_truss,
     ['POST', '/construction/truss/read_attributes'] => :handle_read_truss_attributes,
     ['POST', '/construction/truss/read_attribute']  => :handle_read_truss_attribute,

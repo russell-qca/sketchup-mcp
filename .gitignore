@@ -65,3 +65,12 @@ pip-delete-this-directory.txt
 # Environments
 .env
 .env.local
+
+# Ruby backup files
+*.rb.bak
+*.rb.bak2
+*.rb.bak3
+*.rb.tmp
+
+# Deck calculation output
+deck_calculations.json
